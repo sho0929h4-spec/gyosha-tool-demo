@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>お試し版 業者ツール</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/app.css?v=5bf9e4f">
+</head>
+<body>
+
+<!-- 01 ログイン -->
+<section id="screen-login" class="screen login">
+  <div class="login-title">業者ツール</div>
+  <div class="login-lead">報告書・見積書・工事掲示・図面をスマホで作って送る</div>
+  <form id="login-form" class="body" style="padding:0" novalidate>
+    <div class="ff"><label for="login-mail">メールアドレス</label><input id="login-mail" type="email" autocomplete="username" placeholder="name@example.com"></div>
+    <div class="ff"><label for="login-pw">パスワード</label><input id="login-pw" type="password" autocomplete="current-password"></div>
+    <button id="login-btn" class="btn" type="submit">ログイン</button>
+    <div id="login-msg" class="msg err" role="alert"></div>
+    <button id="forgot-open" class="textlink" type="button">パスワードを忘れた</button>
+  </form>
+  <div id="forgot" class="card" hidden>
+    <div class="card-t">パスワードの再設定</div>
+    <div class="card-d">登録したメールアドレスに、パスワードを決め直すリンクを送ります。</div>
+    <div class="ff"><label for="forgot-mail">メールアドレス</label><input id="forgot-mail" type="email" autocomplete="email"></div>
+    <button id="forgot-send" class="btn sm" type="button">再設定のメールを送る</button>
+    <div id="forgot-msg" class="msg" role="status"></div>
+  </div>
+  <div id="recover" class="card" hidden>
+    <div class="card-t">新しいパスワードを決める</div>
+    <div class="ff"><label for="recover-pw">新しいパスワード（6文字以上）</label><input id="recover-pw" type="password" autocomplete="new-password"></div>
+    <button id="recover-save" class="btn sm" type="button">このパスワードにする</button>
+    <div id="recover-msg" class="msg" role="status"></div>
+  </div>
+  <div class="login-note">会社ごとのアカウント。管理者・作業者の区別はありません。<br>招待された人は、招待メールのリンクからパスワードを決めて入ります。</div>
+</section>
+
+<!-- 02 案件一覧 -->
+<section id="screen-cases" class="screen">
+  <div class="hd">
+    <div class="hd-t"><div class="hd-title">案件</div><div class="hd-sub js-org-name"></div></div>
+    <a href="#settings" id="open-settings" class="hd-btn">設定</a>
+  </div>
+  <div class="search"><input id="cases-q" type="search" aria-label="物件名・号室で探す" placeholder="物件名・号室で探す"></div>
+  <div class="body">
+    <div id="cases-list" class="list"></div>
+    <div id="cases-msg" class="msg err"></div>
+  </div>
+  <div class="foot"><a href="#case/new" id="case-new" class="btn" style="flex:1">＋ 案件を登録</a></div>
+</section>
+
+<!-- 03 案件登録・編集 -->
+<section id="screen-caseform" class="screen white">
+  <div class="hd">
+    <button class="back" type="button" id="cf-back" aria-label="戻る">‹</button>
+    <div class="hd-t"><div class="hd-title" id="cf-title">案件を登録</div></div>
+  </div>
+  <form id="cf-form" class="body" novalidate>
+    <div class="ff"><label for="cf-name">物件名<span class="req">必須</span></label><input id="cf-name" type="text" maxlength="100" placeholder="サンプルハイツ"></div>
+    <div class="ff"><label for="cf-room">号室</label><input id="cf-room" type="text" maxlength="40" placeholder="302"></div>
+    <div class="ff"><label for="cf-addr">住所</label><input id="cf-addr" type="text" maxlength="200" placeholder="東京都…"></div>
+    <div class="sep"></div>
+    <div class="ff"><label for="cf-client">元請（送り先）</label><input id="cf-client" type="text" maxlength="100" list="cf-clients" autocomplete="off" placeholder="みどり管理 ／ 前に使った名前から選べる"><datalist id="cf-clients"></datalist></div>
+    <div class="ff"><label for="cf-contact">担当者名</label><input id="cf-contact" type="text" maxlength="60" placeholder="山田"></div>
+    <div class="ff"><label for="cf-mail">送り先メール</label><input id="cf-mail" type="email" maxlength="200" placeholder="yamada@example.com"></div>
+    <div class="ff"><label for="cf-memo">メモ</label><textarea id="cf-memo" rows="3" maxlength="2000" placeholder="鍵の場所、駐車など"></textarea></div>
+    <div class="hint">物件名・号室・元請・担当者名は、報告書・見積書・工事掲示・共有の文面に自動で入ります。</div>
+    <div id="cf-msg" class="msg err" role="alert"></div>
+  </form>
+  <div class="foot">
+    <button id="cf-cancel" class="btn ghost" type="button" style="flex:1">キャンセル</button>
+    <button id="cf-save" class="btn wide" type="button">登録する</button>
+  </div>
+</section>
+
+<!-- 04 案件画面 -->
+<section id="screen-case" class="screen">
+  <div class="hd">
+    <a href="#cases" class="back" aria-label="戻る">‹</a>
+    <div class="hd-t"><div class="hd-title" id="case-title"></div><div class="hd-sub" id="case-sub"></div></div>
+    <a id="case-edit" class="hd-btn" href="#cases">編集</a>
+  </div>
+  <div class="body">
+    <div class="tools">
+      <button class="tool" type="button" id="tool-report"><span class="tool-t">報告書</span><span class="tool-d">調査・工事の報告</span></button>
+      <button class="tool" type="button" disabled><span class="tool-t">見積書</span><span class="tool-d">準備中</span></button>
+      <button class="tool" type="button" disabled><span class="tool-t">工事掲示</span><span class="tool-d">準備中</span></button>
+      <button class="tool" type="button" disabled><span class="tool-t">図面</span><span class="tool-d">準備中</span></button>
+    </div>
+    <div class="sec-t">この案件の書類</div>
+    <div id="case-docs" class="list"></div>
+    <div id="case-memo" class="card" hidden><div class="card-t">メモ</div><div id="case-memo-t" class="card-d" style="white-space:pre-wrap;overflow-wrap:anywhere"></div></div>
+    <div id="case-msg" class="msg err"></div>
+  </div>
+</section>
+
+<!-- 05 設定 -->
+<section id="screen-settings" class="screen">
+  <div class="hd">
+    <a href="#cases" class="back" aria-label="戻る">‹</a>
+    <div class="hd-t"><div class="hd-title">設定</div></div>
+  </div>
+  <div class="body">
+    <div class="card" id="set-org">
+      <div class="card-t">会社</div>
+      <div class="card-d">会社名・住所・電話・メール・登録番号（インボイス）・ロゴ・社印<br>→ 見積書・工事掲示の連絡先と、共有の文面の署名に使う</div>
+      <button class="btn ghost sm" type="button" id="set-org-open" aria-expanded="false">会社の情報を編集</button>
+      <div id="set-org-form" class="body" style="padding:0" hidden>
+        <div class="ff"><label for="so-name">会社名</label><input id="so-name" type="text" maxlength="100"></div>
+        <div class="ff"><label for="so-addr">住所</label><input id="so-addr" type="text" maxlength="200"></div>
+        <div class="ff"><label for="so-tel">電話</label><input id="so-tel" type="tel" maxlength="40"></div>
+        <div class="ff"><label for="so-mail">メール</label><input id="so-mail" type="email" maxlength="200"></div>
+        <div class="ff"><label for="so-reg">登録番号（インボイス）</label><input id="so-reg" type="text" maxlength="14" placeholder="T1234567890123" autocomplete="off"></div>
+        <div class="ff"><span class="lbl">ロゴ（画像）</span><div class="img-row" id="so-logo"></div></div>
+        <div class="ff"><span class="lbl">社印（画像）</span><div class="img-row" id="so-seal"></div></div>
+        <label class="check"><input id="so-show" type="checkbox">報告書に会社名とロゴを出す</label>
+        <button class="btn sm" type="button" id="so-save">会社の情報を保存</button>
+        <div id="so-msg" class="msg" role="status"></div>
+      </div>
+    </div>
+    <div class="card" id="set-me">
+      <div class="card-t">自分</div>
+      <div class="card-d">名前・電話（共有の文面の署名）・パスワードの変更</div>
+      <button class="btn ghost sm" type="button" id="set-me-open" aria-expanded="false">自分の情報を編集</button>
+      <div id="set-me-form" class="body" style="padding:0" hidden>
+        <div class="ff"><label for="sm-name">名前</label><input id="sm-name" type="text" maxlength="60"></div>
+        <div class="ff"><label for="sm-tel">電話</label><input id="sm-tel" type="tel" maxlength="40"></div>
+        <button class="btn sm" type="button" id="sm-save">自分の情報を保存</button>
+        <div id="sm-msg" class="msg" role="status"></div>
+        <div class="sep"></div>
+        <div class="ff"><label for="sm-pw">新しいパスワード（6文字以上）</label><input id="sm-pw" type="password" autocomplete="new-password"></div>
+        <button class="btn ghost sm" type="button" id="sm-pw-save">パスワードを変える</button>
+        <div id="sm-pw-msg" class="msg" role="status"></div>
+      </div>
+    </div>
+    <div class="card off">
+      <div class="card-t">見積書<span class="soon">準備中</span></div>
+      <div class="card-d">定型テンプレート（何行かのまとまり）・よく使う明細・単価マスタ・消費税率・見積書番号の始まり</div>
+    </div>
+    <div class="card off">
+      <div class="card-t">元請（送り先）<span class="soon">準備中</span></div>
+      <div class="card-d">会社名・担当者・メール。案件登録のときに選べる（今は案件登録で入れた名前が候補に出ます）</div>
+    </div>
+    <div class="card off">
+      <div class="card-t">メンバー<span class="soon">準備中</span></div>
+      <div class="card-d">同じ会社で使う人を招待（メール）。全員同じ権限</div>
+    </div>
+    <div id="set-extra"></div>
+    <button class="link-red" type="button" id="logout">ログアウト</button>
+  </div>
+</section>
+
+ <!-- 06 報告書 -->
+<section id="screen-report" class="screen white">
+  <div class="hd">
+    <button class="back" type="button" id="rp-back" aria-label="戻る">‹</button>
+    <div class="hd-t"><div class="hd-title">報告書</div><div class="hd-sub" id="rp-sub"></div></div>
+  </div>
+  <div class="body" id="rp-body"></div>
+  <div class="foot">
+    <button id="rp-draft" class="btn ghost" type="button" style="flex:1">下書き保存</button>
+    <button id="rp-pdf" class="btn wide" type="button">PDFを作る → 共有</button>
+  </div>
+</section>
+
+<!-- 12 プレビューと共有 -->
+<section id="screen-doc" class="screen">
+  <div class="hd">
+    <a class="back" id="dv-back" href="#cases" aria-label="戻る">‹</a>
+    <div class="hd-t"><div class="hd-title" id="dv-title"></div><div class="hd-sub" id="dv-sub"></div></div>
+    <a class="hd-btn" id="dv-edit" href="#cases">編集に戻る</a>
+  </div>
+  <div class="body">
+    <div id="dv-pages" class="dv-pages"></div>
+    <div id="dv-progress" class="msg" role="status"></div>
+    <button id="dv-retry" class="btn ghost sm" type="button" hidden>もう一度作る</button>
+    <div class="hint" style="text-align:center">PDFは端末の中で作ります。上下にめくってページを確かめられます。</div>
+    <div id="dv-sent" class="card"></div>
+  </div>
+  <div class="foot col">
+    <div class="row">
+      <button id="dv-line" class="btn" type="button" disabled>LINEで共有</button>
+      <button id="dv-mail" class="btn" type="button" disabled>メールで共有</button>
+    </div>
+    <button id="dv-dl" class="btn ghost sm" type="button" disabled>PDFをダウンロード</button>
+  </div>
+</section>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="js/fake-sb.js?v=5bf9e4f"></script>
+<script src="js/demo.js?v=5bf9e4f"></script>
+<script src="js/case-logic.js?v=5bf9e4f"></script>
+<script src="js/report-logic.js?v=5bf9e4f"></script>
+<script src="js/photo-marks.js?v=5bf9e4f"></script>
+<script src="js/app.js?v=5bf9e4f"></script>
+<script src="js/auth.js?v=5bf9e4f"></script>
+<script src="js/cases-api.js?v=5bf9e4f"></script>
+<script src="js/docs-api.js?v=5bf9e4f"></script>
+<script src="js/cases-ui.js?v=5bf9e4f"></script>
+<script src="js/case-form.js?v=5bf9e4f"></script>
+<script src="js/case-ui.js?v=5bf9e4f"></script>
+<script src="js/settings-ui.js?v=5bf9e4f"></script>
+<script src="js/photo-mark-editor.js?v=5bf9e4f"></script>
+<script src="js/report-pdf.js?v=5bf9e4f"></script>
+<script src="js/report-ui.js?v=5bf9e4f"></script>
+<script src="js/share-logic.js?v=5bf9e4f"></script>
+<script src="js/share-ui.js?v=5bf9e4f"></script>
+<script src="js/preview-ui.js?v=5bf9e4f"></script>
+<script>App.start();</script>
+</body>
+</html>
