@@ -31,6 +31,6 @@ const DocsApi = (() => {
       return { path, url };
     },
     // 書類の名前（案件画面の一覧・プレビュー・共有の文面）
-    title: (type, row) => (type === 'report' ? ReportLogic.docLabel(row.work_type) : '書類')
+    title: (type, row) => (type === 'report' ? ReportLogic.docLabel(row.work_type, row.data) : '書類')
   };
 })();

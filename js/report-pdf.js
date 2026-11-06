@@ -115,7 +115,13 @@
     if (company && trim(logoUrl)) { const logo = imgEl(trim(logoUrl), 'rp-co-logo', ''); watchFail(logo); co.appendChild(logo); }
     if (company) co.appendChild(el('span', '', company));
     head.appendChild(co);
-    head.appendChild(el('div', 'rp-co-title', spaced('作業写真報告書')));
+    // 題が長いときは字間をつめ、文字を小さくして、ヘッダの左右にぶつからないようにする
+    const title = RL().docLabel(mode, d);
+    const tEl = el('div', 'rp-co-title', title.length <= 7 ? spaced(title) : title);
+    if (title.length > 7) tEl.style.letterSpacing = '.06em';
+    if (title.length > 9) tEl.style.fontSize = '13pt';
+    else if (title.length > 7) tEl.style.fontSize = '16pt';
+    head.appendChild(tEl);
     const meta = el('div', 'rp-co-meta');
     [['案件No', trim(d.caseNo)], ['作成日', trim(o.createdDate) || RL().todayJa()]].forEach(([k, v]) => {
       const r = el('div', 'rp-mr');
@@ -131,7 +137,7 @@
     [
       { k: '物件名', v: trim(d.prop), cls: 'rp-prop-name' },
       { k: spaced('号室'), v: trim(d.room) },
-      { k: '作業内容', v: RL().MODE_LABEL[mode] },
+      { k: '作業内容', v: RL().modeName(mode, d) },
       { k: '作業日時', v: [RL().fmtDate(d.workDate), RL().timeStr(d)].filter(Boolean).join('　') }
     ].forEach(r => {
       const tr = el('tr');

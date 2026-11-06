@@ -86,7 +86,7 @@
     if (t === 'cases' && r.client_id && !db.clients.some(c => c.id === r.client_id && c.org_id === r.org_id)) return err('foreign key violation', '23503');
     if (t === 'clients' && db.clients.some(c => c.id !== r.id && c.org_id === r.org_id && c.name === r.name)) return err('duplicate key value violates unique constraint', '23505');
     if (CASE_CHILD.includes(t) && !db.cases.some(c => c.id === r.case_id && c.org_id === r.org_id)) return err('foreign key violation', '23503');
-    if (t === 'reports' && !['investigate', 'repair', 'restore'].includes(r.work_type)) return err('check constraint', '23514');
+    if (t === 'reports' && !['investigate', 'work', 'other', 'repair', 'restore'].includes(r.work_type)) return err('check constraint', '23514');
     if (t === 'doc_shares' && (!['report', 'estimate', 'notice', 'drawing'].includes(r.doc_type) || !['share', 'mail', 'line', 'download'].includes(r.via))) return err('check constraint', '23514');
     if (t === 'orgs' && r.registration_number && !/^T[0-9]{13}$/.test(r.registration_number)) return err('new row for relation "orgs" violates check constraint', '23514');
     return null;

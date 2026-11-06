@@ -133,6 +133,10 @@ const ReportUi = (() => {
       seg.appendChild(b);
     });
     body.appendChild(seg);
+    // その他のときだけ、区分の名前（点検・立会いなど）を自由に書く
+    if (st.mode === 'other') {
+      body.appendChild(field('作業区分の名前', input('rp-worklabel', 'text', 'workLabel', { maxLength: 10, placeholder: '例：点検、立会い' }), { hint: '報告書の題と「作業内容」に出ます（10文字まで）' }));
+    }
 
     // 基本情報
     const basic = card('基本情報（案件から自動）');
@@ -196,6 +200,7 @@ const ReportUi = (() => {
       note.setAttribute('aria-label', '対応後の状況の補足');
       ct.appendChild(note);
     }
+    if (cfg.showNote) ct.appendChild(field('申し送り', area('rp-note', 'note', 3, cfg.noteph)));
     if (cfg.showF2) ct.appendChild(field('原因', area('rp-f2', 'f2', 2), { hint: RL.HINT.f2 }));
     if (cfg.showReason) ct.appendChild(field('原因と判断した理由', area('rp-reason', 'reason', 2), { hint: RL.HINT.reason }));
     if (cfg.showF4) ct.appendChild(field('次の対応方針', area('rp-f4', 'f4', 2), { hint: RL.HINT.f4 }));
