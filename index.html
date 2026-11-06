@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>お試し版 業者ツール</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/app.css?v=ce2eff4">
+<link rel="stylesheet" href="css/app.css?v=f83f1a6">
+<link rel="stylesheet" href="css/notice.css?v=f83f1a6">
 </head>
 <body>
 
@@ -85,7 +86,7 @@
     <div class="tools">
       <button class="tool" type="button" id="tool-report"><span class="tool-t">報告書</span><span class="tool-d">調査・工事の報告</span></button>
       <button class="tool" type="button" id="tool-estimate"><span class="tool-t">見積書</span><span class="tool-d">定型・明細・版</span></button>
-      <button class="tool" type="button" disabled><span class="tool-t">工事掲示</span><span class="tool-d">準備中</span></button>
+      <button class="tool" type="button" id="tool-notice"><span class="tool-t">工事掲示</span><span class="tool-d">A4 1枚のお知らせ</span></button>
       <button class="tool" type="button" disabled><span class="tool-t">図面</span><span class="tool-d">準備中</span></button>
     </div>
     <div class="sec-t">この案件の書類</div>
@@ -229,6 +230,23 @@
   </div>
 </section>
 
+<!-- 09 工事掲示 -->
+<section id="screen-notice" class="screen white">
+  <div class="hd">
+    <button class="back" type="button" id="nt-back" aria-label="戻る">‹</button>
+    <div class="hd-t"><div class="hd-title">工事掲示</div><div class="hd-sub" id="nt-sub"></div></div>
+    <button class="hd-btn" type="button" id="nt-to-pv">プレビューへ↓</button>
+  </div>
+  <div class="body" id="nt-body"></div>
+  <div class="foot col">
+    <div class="row">
+      <button id="nt-dup" class="btn ghost sm" type="button">別の号室に複製</button>
+      <button id="nt-draft" class="btn ghost sm" type="button">下書き保存</button>
+    </div>
+    <button id="nt-pdf" class="btn" type="button">PDFを作る → 共有</button>
+  </div>
+</section>
+
 <!-- 12 プレビューと共有 -->
 <section id="screen-doc" class="screen">
   <div class="hd">
@@ -257,32 +275,35 @@
 
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="js/fake-sb.js?v=ce2eff4"></script>
-<script src="js/demo.js?v=ce2eff4"></script>
-<script src="js/case-logic.js?v=ce2eff4"></script>
-<script src="js/report-logic.js?v=ce2eff4"></script>
-<script src="js/estimate-logic.js?v=ce2eff4"></script>
-<script src="js/estimate-import.js?v=ce2eff4"></script>
-<script src="js/pdfjs-loader.js?v=ce2eff4"></script>
-<script src="js/photo-marks.js?v=ce2eff4"></script>
-<script src="js/app.js?v=ce2eff4"></script>
-<script src="js/auth.js?v=ce2eff4"></script>
-<script src="js/cases-api.js?v=ce2eff4"></script>
-<script src="js/docs-api.js?v=ce2eff4"></script>
-<script src="js/estimates-api.js?v=ce2eff4"></script>
-<script src="js/cases-ui.js?v=ce2eff4"></script>
-<script src="js/case-form.js?v=ce2eff4"></script>
-<script src="js/case-ui.js?v=ce2eff4"></script>
-<script src="js/settings-ui.js?v=ce2eff4"></script>
-<script src="js/photo-mark-editor.js?v=ce2eff4"></script>
-<script src="js/report-pdf.js?v=ce2eff4"></script>
-<script src="js/estimate-pdf.js?v=ce2eff4"></script>
-<script src="js/report-ui.js?v=ce2eff4"></script>
-<script src="js/estimate-ui.js?v=ce2eff4"></script>
-<script src="js/estimate-import-ui.js?v=ce2eff4"></script>
-<script src="js/share-logic.js?v=ce2eff4"></script>
-<script src="js/share-ui.js?v=ce2eff4"></script>
-<script src="js/preview-ui.js?v=ce2eff4"></script>
+<script src="js/fake-sb.js?v=f83f1a6"></script>
+<script src="js/demo.js?v=f83f1a6"></script>
+<script src="js/case-logic.js?v=f83f1a6"></script>
+<script src="js/report-logic.js?v=f83f1a6"></script>
+<script src="js/estimate-logic.js?v=f83f1a6"></script>
+<script src="js/estimate-import.js?v=f83f1a6"></script>
+<script src="js/notice-logic.js?v=f83f1a6"></script>
+<script src="js/pdfjs-loader.js?v=f83f1a6"></script>
+<script src="js/photo-marks.js?v=f83f1a6"></script>
+<script src="js/app.js?v=f83f1a6"></script>
+<script src="js/auth.js?v=f83f1a6"></script>
+<script src="js/cases-api.js?v=f83f1a6"></script>
+<script src="js/docs-api.js?v=f83f1a6"></script>
+<script src="js/estimates-api.js?v=f83f1a6"></script>
+<script src="js/cases-ui.js?v=f83f1a6"></script>
+<script src="js/case-form.js?v=f83f1a6"></script>
+<script src="js/case-ui.js?v=f83f1a6"></script>
+<script src="js/settings-ui.js?v=f83f1a6"></script>
+<script src="js/photo-mark-editor.js?v=f83f1a6"></script>
+<script src="js/report-pdf.js?v=f83f1a6"></script>
+<script src="js/estimate-pdf.js?v=f83f1a6"></script>
+<script src="js/notice-pdf.js?v=f83f1a6"></script>
+<script src="js/report-ui.js?v=f83f1a6"></script>
+<script src="js/estimate-ui.js?v=f83f1a6"></script>
+<script src="js/estimate-import-ui.js?v=f83f1a6"></script>
+<script src="js/notice-ui.js?v=f83f1a6"></script>
+<script src="js/share-logic.js?v=f83f1a6"></script>
+<script src="js/share-ui.js?v=f83f1a6"></script>
+<script src="js/preview-ui.js?v=f83f1a6"></script>
 <script>App.start();</script>
 </body>
 </html>

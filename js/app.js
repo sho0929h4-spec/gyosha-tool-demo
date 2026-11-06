@@ -1,5 +1,5 @@
 // js/app.js — ルーター（location.hash）と共通の道具: $, mk, dBtn, errText, askPopup, showScreen, toast
-//   #login #cases #case/new #case/{id} #case/{id}/edit #settings #report/{id} #estimate/{id} #estimate/{id}/import #doc/{type}/{id}
+//   #login #cases #case/new #case/{id} #case/{id}/edit #settings #report/{id} #estimate/{id} #estimate/{id}/import #notice/{id} #doc/{type}/{id}
 //   ctx = { user, org, membership }（ログインしていなければ null）
 let ctx = null;
 
@@ -37,6 +37,7 @@ function toast(text) {
 
 // 確認のポップアップ（confirm() の代わり）。OK = true、× と「キャンセル」= false。外側のクリックや Esc では閉じない
 //   askPopup(text, { title, okLabel, cancelLabel, danger, id }) → Promise<boolean>
+//   input: { label, value, placeholder } を渡すと欄を1つ出し、OK = 入れた文字（前後の空白を除く）、× と「キャンセル」= null
 function askPopup(text, opts) {
   const o = opts || {};
   const prev = document.getElementById('ask-pop');
@@ -60,23 +61,37 @@ function askPopup(text, opts) {
       if (back && back.focus && back.isConnected) back.focus({ preventScroll: true });
       resolve(v);
     };
-    const x = dBtn('×', 'modal-x', () => done(false));
+    const x = dBtn('×', 'modal-x', () => done(o.input ? null : false));
     x.id = 'ask-pop-x';
     x.setAttribute('aria-label', '閉じる');
     hd.append(h, x);
     const t = mk('p', 'ask-pop-t', text);
     t.id = 'ask-pop-t';
     const act = mk('div', 'modal-act');
-    const no = dBtn(o.cancelLabel || 'キャンセル', 'btn ghost', () => done(false));
+    let inp = null;
+    const no = dBtn(o.cancelLabel || 'キャンセル', 'btn ghost', () => done(o.input ? null : false));
     no.id = 'ask-pop-no';
-    const ok = dBtn(o.okLabel || 'OK', 'btn' + (o.danger ? ' red' : ''), () => done(true));
+    const ok = dBtn(o.okLabel || 'OK', 'btn' + (o.danger ? ' red' : ''), () => done(inp ? inp.value.trim() : true));
     ok.id = 'ask-pop-ok';
     act.append(no, ok);
-    dlg.append(hd, t, act);
+    dlg.append(hd, t);
+    if (o.input) {
+      const f = mk('div', 'ff');
+      const l = mk('label', null, o.input.label || '');
+      inp = mk('input');
+      inp.type = 'text';
+      inp.id = l.htmlFor = 'ask-pop-in';
+      inp.value = o.input.value || '';
+      inp.placeholder = o.input.placeholder || '';
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); ok.click(); } });
+      f.append(l, inp);
+      dlg.appendChild(f);
+    }
+    dlg.appendChild(act);
     bg.appendChild(dlg);
-    bg._done = done;
+    bg._done = v => done(o.input && v === false ? null : v);
     document.body.appendChild(bg);
-    ok.focus({ preventScroll: true });
+    (inp || ok).focus({ preventScroll: true });
   });
 }
 
@@ -92,7 +107,8 @@ const App = (() => {
     [new RegExp('^#report/' + UUID + '$'), id => ReportUi.show(id)],
     [new RegExp('^#estimate/' + UUID + '$'), id => EstimateUi.show(id)],
     [new RegExp('^#estimate/' + UUID + '/import$'), id => EstimateImportUi.show(id)],
-    [new RegExp('^#doc/(report|estimate)/' + UUID + '$'), (type, id) => PreviewUi.show(type, id)]
+    [new RegExp('^#notice/' + UUID + '$'), id => NoticeUi.show(id)],
+    [new RegExp('^#doc/(report|estimate|notice)/' + UUID + '$'), (type, id) => PreviewUi.show(type, id)]
   ];
   const leaveHooks = []; // 画面を離れる前（報告書の保存待ちなど）
   const onLeave = fn => leaveHooks.push(fn);

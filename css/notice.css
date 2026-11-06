@@ -1,0 +1,57 @@
+/* css/notice.css — 工事掲示（09）の A4 の紙面（移植メモ §4.6 の数値をそのまま写した）と、画面での縮小・直接編集の目印 */
+
+/* ===== A4縦の掲示 ===== */
+.sheet { width: 210mm; height: 297mm; padding: 20mm; background: #fff; color: #000; overflow: hidden;
+  border: 1px solid #ccc; box-shadow: 0 1px 6px rgba(0,0,0,.12); }
+.sheet-inner { --scale: 1; --sheet-alert: #c00000; height: 100%;
+  font-family: "Hiragino Mincho ProN", "Yu Mincho", "MS Mincho", serif;
+  font-size: calc(11.5pt * var(--scale)); line-height: 1.75; color: #000; text-align: left; }
+.sheet-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1em; margin-bottom: 1.2em; }
+.sheet-addressee { font-size: 1.05em; font-weight: 600; }
+.sheet-notice-date { white-space: nowrap; }
+.sheet-greeting { margin: 0 0 1.3em; text-align: center; font-size: 1.35em; font-weight: 700; letter-spacing: .12em; }
+.sheet-opening { margin: 0 0 1em; }
+.sheet-subject { margin: 0 0 1.1em; text-align: center; font-size: 1.25em; font-weight: 700; letter-spacing: .06em; }
+.sheet-body { margin: 0 0 .9em; }
+.sheet-body p { margin: 0 0 .55em; }
+.sheet-body p:last-child { margin-bottom: 0; }
+.sheet-body .body-line { display: block; }
+.sheet-closing { margin: 0 0 1.2em; text-align: right; }
+.sheet-ki { margin: 0 0 .9em; text-align: center; letter-spacing: .5em; font-weight: 600; }
+/* 記の枠 */
+.sheet-details { margin: 0 auto 1.2em; padding: .9em 1.2em; border: 1px solid #000; }
+.detail-row { display: flex; align-items: flex-start; gap: .6em; }
+.detail-row + .detail-row { margin-top: .35em; }
+.detail-label { flex: 0 0 6.2em; font-weight: 600; white-space: nowrap; }
+.detail-value { flex: 1 1 auto; }
+.detail-notes { margin-top: .15em; }
+.detail-note { display: block; padding-left: 1em; text-indent: -1em; } /* ※ をぶら下げる */
+.emph { color: var(--sheet-alert); }
+.emph-bold .emph { font-weight: 700; }
+.sheet-contact { margin-top: 1.4em; padding-top: .7em; border-top: 1px solid #000; }
+.contact-title { margin: 0 0 .35em; font-weight: 700; }
+.contact-line { display: block; white-space: pre-line; }
+
+/* ===== 画面: 縮めて見せる（組み方は等倍のまま。transform だけ）。拡大すると箱の中で動かせる ===== */
+.nt-pv { overflow: auto; -webkit-overflow-scrolling: touch; background: #e9e9e9; border-radius: 8px; padding: 8px; max-width: 100%; }
+.nt-outer { margin: 0 auto; overflow: hidden; }
+.nt-scaler { transform-origin: top left; width: 210mm; }
+.nt-fit { font-size: 13px; color: #555; }
+.nt-fit.warn { color: #b00; font-weight: 700; }
+.nt-edits { display: flex; flex-direction: column; gap: 6px; }
+.nt-color { display: flex; align-items: center; gap: 10px; }
+.nt-color input[type=color] { width: 64px; height: 44px; padding: 2px; border: 1px solid #bbb; border-radius: 8px; background: #fff; }
+.nt-range { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px; align-items: center; }
+.nt-date3 { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px; align-items: center; }
+input.invalid, textarea.invalid { border-color: #b00; outline: 2px solid #b00; }
+
+/* 直接編集の目印は画面だけ（PDF には出さない） */
+.nt-pv [data-edit] { border-radius: 2px; outline: 1px dashed #9db8d2; outline-offset: 1px; }
+.nt-pv [data-edit]:focus { outline: 2px solid #1e5bb8; outline-offset: 2px; background: rgba(47,93,138,.06); }
+.nt-pv [data-edited="1"] { background: rgba(47,93,138,.07); }
+
+/* PDF を撮るとき: 枠・影・目印を外す（用紙の大きさは変えない） */
+.capturing .sheet { border-color: #fff; box-shadow: none; }
+.capturing [data-edit] { outline: none !important; background: none !important; }
+
+@page { size: A4 portrait; margin: 0; }

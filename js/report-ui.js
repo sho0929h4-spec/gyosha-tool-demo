@@ -3,7 +3,7 @@
 const ReportUi = (() => {
   const RL = ReportLogic;
   const SAVE_MS = 1500;
-  let st = null; // { row, caseRow, mode, d, photos, urls, timer, saving, dirty, savedAt, err }
+  let st = null; // { row, caseRow, noticeMade（同じ案件に PDF を作った工事掲示がある）, mode, d, photos, urls, timer, saving, dirty, savedAt, err }
 
   async function create(caseRow) {
     const { data, error } = await sb.from('reports').insert({ case_id: caseRow.id, work_type: 'investigate', data: RL.newData(caseRow, new Date()), photos: [] }).select().single();
@@ -234,7 +234,7 @@ const ReportUi = (() => {
     const cl = card('チェックリスト', 'rp-checklist');
     cl.appendChild(mk('div', 'grp-t', '作業チェックリスト'));
     const wl = mk('div', 'chips col');
-    RL.WORK_CHECKLISTS[st.mode].forEach(i => wl.appendChild(chip(i, 'workChecklist', i)));
+    RL.workItems(st.mode, st.noticeMade).forEach(i => wl.appendChild(chip(i, 'workChecklist', i)));
     cl.appendChild(wl);
     cl.appendChild(mk('div', 'grp-t', '鍵の取り扱い（借りた場合のみ）'));
     const kl = mk('div', 'chips col');
@@ -384,8 +384,8 @@ const ReportUi = (() => {
     const r = await sb.from('reports').select('*').eq('id', id).maybeSingle();
     if (r.error) throw r.error;
     if (!r.data) { toast('報告書が見つかりませんでした'); location.replace('#cases'); return; }
-    const caseRow = await CasesApi.get(r.data.case_id);
-    st = { row: r.data, caseRow: caseRow || {}, mode: RL.modeOf(r.data.work_type), d: Object.assign(RL.newData(caseRow), r.data.data || {}),
+    const [caseRow, notices] = await Promise.all([CasesApi.get(r.data.case_id), DocsApi.notices(r.data.case_id).catch(() => [])]);
+    st = { row: r.data, caseRow: caseRow || {}, noticeMade: notices.some(n => n.data && n.data.pdf_at), mode: RL.modeOf(r.data.work_type), d: Object.assign(RL.newData(caseRow), r.data.data || {}),
       photos: Array.isArray(r.data.photos) ? r.data.photos : [], urls: {}, timer: null, saving: null, dirty: false, savedAt: '', err: '' };
     setSub();
     render();

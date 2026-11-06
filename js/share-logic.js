@@ -5,6 +5,7 @@
 //     結び「ご確認のほど、よろしくお願いいたします。」→ 署名（会社・自分・電話）
 //   本文（LINE）: 宛名・署名なし。用件は「サンプルハイツ 302号室 調査報告書を共有いたします。」
 //   見積書: 件名「サンプルハイツ 302号室 見積書」・用件「表題の件につきまして、見積書を共有いたします。」（LINE は「… 見積書を共有いたします。」）
+//   工事掲示: 件名「サンプルハイツ 302号室 工事掲示」・用件「表題の件につきまして、工事掲示を共有いたします。」（名前の号室は件名の号室と重ねない）
 (function (root) {
   const inNode = typeof module !== 'undefined' && module.exports;
   const CL = () => (inNode ? require('./case-logic.js') : root.CaseLogic);
@@ -21,7 +22,7 @@
   // o: { docLabel, caseRow, org: { name, tel }, me: { name, tel }, short } → { subject, body }
   // 見積書は番号と版を付けた名前（「見積書 EST-… 第N版」）でも、件名と用件では「見積書」とだけ書く
   function message(o) {
-    const doc = /^見積書/.test(str(o.docLabel)) ? '見積書' : str(o.docLabel);
+    const doc = (str(o.docLabel).match(/^(見積書|工事掲示)/) || [str(o.docLabel)])[0];
     const subject = [CL().placeName(o.caseRow || {}), doc].filter(Boolean).join(' ');
     const orgName = str(o.org && o.org.name), myName = str(o.me && o.me.name);
     const tel = str(o.me && o.me.tel) || str(o.org && o.org.tel);

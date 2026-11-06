@@ -43,6 +43,8 @@
       '写真の手ブレがないか確認した'
     ]
   };
+  // 同じ案件に PDF を作った工事掲示があるとき、工事のチェックリストの最後に足す（簡易版 Task 80 と同じ考え。注意だけ）
+  const NOTICE_REMOVED = '工事掲示を取り外した';
   /* 鍵の取り扱い（全モード共通・任意） */
   const KEY_CHECKLIST = ['鍵を借りた（借りていない場合はチェック不要）', '鍵を返却した', '返却時の写真をアップロードした'];
 
@@ -154,7 +156,9 @@
   }
   const todayJa = (now) => { const d = now || new Date(); return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`; };
   // 作業チェックリスト（今の区分の項目の順）・鍵
-  const workChecked = (d, mode) => WORK_CHECKLISTS[modeOf(mode)].filter(i => arr(d && d.workChecklist).includes(i));
+  //   withNotice: 画面に「工事掲示を取り外した」を出すか（工事のときだけ）。PDF ではチェックしてあれば出す
+  const workItems = (mode, withNotice) => WORK_CHECKLISTS[modeOf(mode)].concat(modeOf(mode) === 'work' && withNotice !== false ? [NOTICE_REMOVED] : []);
+  const workChecked = (d, mode) => workItems(mode).filter(i => arr(d && d.workChecklist).includes(i));
   const keyChecked = d => KEY_CHECKLIST.filter(i => arr(d && d.keyChecklist).includes(i));
   // 結果の表（値がある行だけ）
   function resultRows(d, mode) {
@@ -180,8 +184,8 @@
   const modeName = (mode, d) => (modeOf(mode) === 'other' ? str(d && d.workLabel) || 'その他' : MODE_LABEL[modeOf(mode)]);
   const docLabel = (mode, d) => modeName(mode, d) + '報告書';
 
-  const api = { WTYPE_MODE, MODE_LABEL, INV_ITEMS, RESTORE_PLACES, RESTORE_PARTS, AFTER_STATUS, LEAK, LEAK_ACTION, WORK_CHECKLISTS, KEY_CHECKLIST, MODES, HINT, PHASES, PHASE_COLORS,
-    modeOf, modeName, newData, checkedItems, leakActionText, afterStatusText, timeStr, fmtDate, todayJa, workChecked, keyChecked, resultRows, validate, docLabel };
+  const api = { WTYPE_MODE, MODE_LABEL, INV_ITEMS, RESTORE_PLACES, RESTORE_PARTS, AFTER_STATUS, LEAK, LEAK_ACTION, WORK_CHECKLISTS, NOTICE_REMOVED, KEY_CHECKLIST, MODES, HINT, PHASES, PHASE_COLORS,
+    modeOf, modeName, newData, checkedItems, leakActionText, afterStatusText, timeStr, fmtDate, todayJa, workItems, workChecked, keyChecked, resultRows, validate, docLabel };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ReportLogic = api;
 })(typeof window !== 'undefined' ? window : globalThis);
