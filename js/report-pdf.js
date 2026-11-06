@@ -1,4 +1,4 @@
-// js/report-pdf.js — 報告書の A4 表紙＋写真ページを描画し、PDF（Blob）にする。window.ReportPdf = { toBlob }
+// js/report-pdf.js — 報告書の A4 表紙＋写真ページを描画し、PDF（Blob）にする。window.ReportPdf = { toBlob, step, fontsReady }
 // 様式（寸法・文言・色）は report-tool（claude code/report-tool/index.html 993-1099行の buildReportContent / buildPhotoPage と .rp-* CSS）から写した。
 // 作り方は簡易版（業者ツール（簡易版）/js/report-pdf.js）を写した: createElement + textContent（innerHTML を使わない）・1ページずつ html2canvas → jsPDF・
 //   進みの表示（opts.onStep(段階)）と段階ごとの30秒の見切り（step）・長い表紙は行の境目で次のページへ（slicesOf）・写真の印は重ねた画像に差し替え（applyMarks）。
@@ -477,5 +477,5 @@
     throw new Error('写真が多すぎてPDFが大きすぎます（20MBまで）。写真を減らしてください');
   }
 
-  window.ReportPdf = { toBlob };
+  window.ReportPdf = { toBlob, step, fontsReady }; // step・fontsReady は見積書（estimate-pdf.js）でも使う
 })();

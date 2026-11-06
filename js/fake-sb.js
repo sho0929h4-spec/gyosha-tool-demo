@@ -5,7 +5,7 @@
 //   RLS: 自社（org_id）の行だけ。列 grant: 書ける列だけ（org_id・id・created_by などを送ると permission denied）。必須・文字数の一部
 //   auth: signInWithPassword（メールとパスワードが空でなければ通す）/ signOut / getSession / getUser / onAuthStateChange / resetPasswordForEmail（送らずに記録）/ updateUser
 //   storage.from(b).upload / getPublicUrl / createSignedUrl / remove（1段目のフォルダ = 自社）
-//   rpc: my_org_id / estimate_next_number
+//   rpc: my_org_id / estimate_next_number / estimate_issue
 // 最初のデータ: 会社1つ・利用者1人・案件0件。テストからは window.__fake で中を見る。
 (function () {
   'use strict';
@@ -40,6 +40,7 @@
   function persist() { localStorage.setItem(KEY, JSON.stringify(db)); }
 
   // 列 grant（001_init.sql と同じ）
+  const RATE_COLS = ['kind', 'client', 'vendor', 'property', 'description', 'key', 'unit', 'quantity', 'unit_price', 'source', 'date'];
   const GRANT = {
     orgs: { update: ['name', 'address', 'tel', 'email', 'registration_number', 'logo_path', 'seal_path', 'show_company_on_report', 'tax_rate'] },
     memberships: { update: ['display_name', 'phone'] },
@@ -47,13 +48,13 @@
     cases: { insert: ['name', 'room', 'address', 'client_id', 'client_name', 'client_contact', 'client_email', 'memo'],
       update: ['name', 'room', 'address', 'client_id', 'client_name', 'client_contact', 'client_email', 'memo', 'archived_at'], del: true },
     reports: { insert: ['case_id', 'work_type', 'data', 'photos'], update: ['work_type', 'data', 'photos'], del: true },
-    estimates: { insert: ['case_id', 'series_id', 'version', 'data'], update: ['data', 'status', 'number'], del: true },
+    estimates: { insert: ['case_id', 'series_id', 'version', 'number', 'data'], update: ['data', 'status', 'number'], del: true },
     notices: { insert: ['case_id', 'data'], update: ['data'], del: true },
     drawings: { insert: ['case_id', 'image_path', 'marks'], update: ['image_path', 'marks'], del: true },
     doc_shares: { insert: ['case_id', 'doc_type', 'doc_id', 'via', 'pdf_path'], update: ['undone_at'] },
     estimate_templates: { insert: ['owner_user_id', 'name', 'lines', 'sort'], update: ['name', 'lines', 'sort'], del: true },
     estimate_presets: { insert: ['owner_user_id', 'text', 'unit', 'price', 'sort'], update: ['text', 'unit', 'price', 'sort'], del: true },
-    rate_master: { insert: ['name', 'unit', 'cost', 'price', 'source'], update: ['name', 'unit', 'cost', 'price', 'source'], del: true }
+    rate_master: { insert: RATE_COLS, update: RATE_COLS, del: true }
   };
   const DEFAULTS = {
     clients: { contact: '', email: '' },
@@ -65,7 +66,7 @@
     doc_shares: { pdf_path: null, undone_at: null },
     estimate_templates: { owner_user_id: null, lines: [], sort: 0 },
     estimate_presets: { owner_user_id: null, unit: '', price: 0, sort: 0 },
-    rate_master: { unit: '', cost: null, price: null, source: '' }
+    rate_master: { client: '', vendor: '', property: '', unit: '', quantity: 1, source: '', date: null }
   };
   const HAS_CREATED_BY = ['cases', 'reports', 'estimates', 'notices', 'drawings'];
   const HAS_UPDATED_AT = ['cases', 'reports', 'estimates', 'notices', 'drawings'];
@@ -85,9 +86,11 @@
     }
     if (t === 'cases' && r.client_id && !db.clients.some(c => c.id === r.client_id && c.org_id === r.org_id)) return err('foreign key violation', '23503');
     if (t === 'clients' && db.clients.some(c => c.id !== r.id && c.org_id === r.org_id && c.name === r.name)) return err('duplicate key value violates unique constraint', '23505');
+    if (t === 'estimates' && db.estimates.some(x => x.id !== r.id && x.series_id === r.series_id && x.version === r.version)) return err('duplicate key value violates unique constraint', '23505');
     if (CASE_CHILD.includes(t) && !db.cases.some(c => c.id === r.case_id && c.org_id === r.org_id)) return err('foreign key violation', '23503');
     if (t === 'reports' && !['investigate', 'work', 'other', 'repair', 'restore'].includes(r.work_type)) return err('check constraint', '23514');
     if (t === 'doc_shares' && (!['report', 'estimate', 'notice', 'drawing'].includes(r.doc_type) || !['share', 'mail', 'line', 'download'].includes(r.via))) return err('check constraint', '23514');
+    if (t === 'rate_master' && (!['cost', 'sell'].includes(r.kind) || !String(r.description || '').trim() || !r.key || !(Number(r.unit_price) > 0))) return err('check constraint', '23514');
     if (t === 'orgs' && r.registration_number && !/^T[0-9]{13}$/.test(r.registration_number)) return err('new row for relation "orgs" violates check constraint', '23514');
     return null;
   }
@@ -145,6 +148,7 @@
           if (Object.keys(src).some(k => !g.insert.includes(k))) return { error: denied() };
           const r = Object.assign({ id: uuid(), org_id: myOrg() }, copy(DEFAULTS[t] || {}), copy(src));
           if (t === 'estimates' && !r.series_id) r.series_id = uuid();
+          if (t === 'rate_master' && !r.date) { const d = new Date(); r.date = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
           if (t === 'doc_shares') { r.sent_at = now(); r.sent_by = me(); }
           else r.created_at = now();
           if (HAS_CREATED_BY.includes(t)) r.created_by = me();
@@ -161,6 +165,7 @@
         let rows = this.match();
         if (t === 'memberships') rows = rows.filter(r => r.user_id === me());
         if (t === 'estimates') rows = rows.filter(r => r.status === 'draft');
+        if (t === 'estimates' && 'status' in this.patch && this.patch.status !== 'draft' && rows.length) return { error: err('new row violates row-level security policy for table "estimates"', '42501') }; // 出すのは estimate_issue だけ
         for (const r of rows) {
           Object.assign(r, copy(this.patch));
           if (HAS_UPDATED_AT.includes(t)) r.updated_at = now();
@@ -251,7 +256,7 @@
     };
   }
 
-  async function rpc(fn) {
+  async function rpc(fn, args) {
     await wait();
     if (!me() || !myOrg()) return { data: null, error: denied() };
     if (fn === 'my_org_id') return { data: myOrg(), error: null };
@@ -260,6 +265,15 @@
       o.estimate_seq++;
       persist();
       return { data: String(o.estimate_seq).padStart(4, '0'), error: null };
+    }
+    if (fn === 'estimate_issue') { // その版を issued に、同じ系列のそれより前の版で issued のものを superseded に
+      const r = db.estimates.find(x => x.id === (args && args.p_id) && x.org_id === myOrg() && ['draft', 'issued'].includes(x.status));
+      if (r) {
+        r.status = 'issued';
+        db.estimates.filter(x => x.series_id === r.series_id && x.org_id === myOrg() && x.version < r.version && x.status === 'issued').forEach(x => { x.status = 'superseded'; });
+        persist();
+      }
+      return { data: null, error: null };
     }
     return { data: null, error: err('function ' + fn + ' does not exist', '42883') };
   }

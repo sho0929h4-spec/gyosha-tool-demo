@@ -1,7 +1,7 @@
-// js/case-ui.js — 04 案件画面: 4つのツール（報告書。見積書・工事掲示・図面は準備中）＋この案件の書類（種類の札・名前・作成日・送付の状態）
+// js/case-ui.js — 04 案件画面: 4つのツール（報告書・見積書。工事掲示・図面は準備中）＋この案件の書類（種類の札・名前・作成日・送付の状態）
 const CaseUi = (() => {
   let cur = null, wired = false;
-  const KIND = { report: '報告書' };
+  const KIND = { report: '報告書', estimate: '見積書' };
   // 下書き（PDF を作ったことがない）は続きから編集、PDF を作ったものはプレビューと共有へ
   const hrefOf = (type, row) => (row.data && row.data.pdf_at ? '#doc/' + type + '/' + row.id : '#' + type + '/' + row.id);
 
@@ -14,6 +14,13 @@ const CaseUi = (() => {
       try { location.hash = '#report/' + (await ReportUi.create(cur)).id; }
       catch (e) { $('case-msg').textContent = '報告書を作れませんでした: ' + errText(e); }
       finally { $('tool-report').disabled = false; }
+    });
+    $('tool-estimate').addEventListener('click', async () => {
+      if (!cur) return;
+      $('tool-estimate').disabled = true;
+      try { location.hash = '#estimate/' + (await EstimatesApi.createDraft(cur)).id; }
+      catch (e) { $('case-msg').textContent = '見積書を作れませんでした: ' + errText(e); }
+      finally { $('tool-estimate').disabled = false; }
     });
   }
   async function show(id) {
@@ -30,8 +37,9 @@ const CaseUi = (() => {
     $('case-memo').hidden = !c.memo;
     $('case-memo-t').textContent = c.memo || '';
     try {
-      const [reports, shares] = await Promise.all([DocsApi.reports(id), DocsApi.shares(id)]);
-      const docs = reports.map(r => ({ type: 'report', row: r })).sort((a, b) => (a.row.created_at < b.row.created_at ? 1 : -1));
+      const [reports, estimates, shares] = await Promise.all([DocsApi.reports(id), DocsApi.estimates(id), DocsApi.shares(id)]);
+      const docs = reports.map(r => ({ type: 'report', row: r })).concat(estimates.map(r => ({ type: 'estimate', row: r })))
+        .sort((a, b) => (a.row.created_at < b.row.created_at ? 1 : -1));
       const host = $('case-docs');
       if (!docs.length) { host.appendChild(mk('div', 'empty', 'まだ書類はありません。上のボタンから作ってください')); return; }
       docs.forEach(({ type, row }) => {

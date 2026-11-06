@@ -5,9 +5,9 @@ body { margin: 0; max-width: 100%; }
 body { font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; color: #222; background: #f4f4f4; font-size: 15px; line-height: 1.5; }
 a { color: #222; text-decoration: none; }
 button, input, select, textarea { font-family: inherit; color: #222; }
-input[type=text], input[type=email], input[type=password], input[type=search], input[type=date], input[type=time], input[type=tel], select, textarea {
+input[type=text], input[type=email], input[type=password], input[type=search], input[type=date], input[type=time], input[type=tel], input[type=number], select, textarea {
   width: 100%; min-width: 0; font-size: 16px; border: 1px solid #bbb; border-radius: 8px; background: #fff; }
-input[type=text], input[type=email], input[type=password], input[type=search], input[type=date], input[type=time], input[type=tel], select { height: 48px; padding: 0 12px; }
+input[type=text], input[type=email], input[type=password], input[type=search], input[type=date], input[type=time], input[type=tel], input[type=number], select { height: 48px; padding: 0 12px; }
 textarea { padding: 10px 12px; resize: vertical; line-height: 1.6; }
 input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid #1e5bb8; outline-offset: 1px; }
 [hidden] { display: none !important; }
@@ -138,6 +138,50 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .add-row .btn { flex: 1; }
 .notes { background: #fff7e0; border: 1px solid #e6c766; border-radius: 10px; padding: 12px; font-size: 13px; }
 .notes ul { margin: 4px 0 0; padding-left: 18px; }
+
+/* 見積書（07） */
+.es-to { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+.es-no { font-size: 16px; min-height: 24px; }
+.tpl-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.tpl-grid .btn { padding: 0 6px; }
+.ln { border: 1px solid #ddd; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.grid3 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr); gap: 8px; }
+.ln-acts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.ln-acts .btn { padding: 0 4px; }
+.quick { display: flex; flex-direction: column; gap: 8px; }
+.opt-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.opt-row input[type=number] { width: 80px; flex: none; }
+.step-btn { width: 44px; height: 44px; flex: none; border: 1px solid #bbb; border-radius: 8px; background: #fff; font-size: 18px; cursor: pointer; }
+.sum-row { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; }
+.sum-row.big { font-size: 18px; font-weight: 700; border-top: 1px solid #eee; padding-top: 6px; }
+.set-li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.set-li > span { flex-grow: 1; min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+.set-li .btn { flex: none; }
+/* 単価マスタ: 照合の札（07）・一覧（05） */
+.rc { border: 1px solid #ddd; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; overflow-wrap: anywhere; min-width: 0; }
+.rc.warn { border-color: #e3a3a3; background: #fff6f6; }
+.rc-t { font-weight: 600; }
+.rc-lv { margin-right: 6px; color: #555; }
+.rc.warn .rc-lv { color: #b00; }
+.rc-off { font-size: 12px; color: #555; background: #f4f4f4; border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; }
+.rm { border: 1px solid #ddd; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+.rm-t { font-size: 15px; font-weight: 600; }
+.rm .btn { align-self: flex-end; }
+
+/* 仕入見積の読み込み（08） */
+.vf { border: 1px solid; border-radius: 10px; padding: 10px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 8px; overflow-wrap: anywhere; }
+.vf.ok { background: #f0fdf4; border-color: #86efac; color: #166534; }
+.vf.ng { background: #fef2f2; border-color: #fca5a5; color: #b00; }
+.vf table { border-collapse: collapse; }
+.vf td { padding: 1px 12px 1px 0; }
+.vf td + td { text-align: right; font-variant-numeric: tabular-nums; }
+.vf-n { font-size: 12px; }
+.im-row { display: flex; gap: 10px; align-items: flex-start; border: 1px solid #ddd; border-radius: 8px; padding: 10px; min-height: 44px; cursor: pointer; min-width: 0; }
+.im-row input { width: 22px; height: 22px; flex: none; margin: 0; }
+.im-row.off { color: #888; background: #fafafa; }
+.im-m { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex-grow: 1; }
+.im-d { font-size: 15px; overflow-wrap: anywhere; }
+.im-s { font-size: 13px; color: #555; }
 
 /* プレビュー（12） */
 .dv-pages { display: flex; flex-direction: column; gap: 12px; }

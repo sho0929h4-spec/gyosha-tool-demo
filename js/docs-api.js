@@ -1,10 +1,11 @@
-// js/docs-api.js — 案件の書類（今は報告書）と送付の記録（doc_shares）の読み書き
+// js/docs-api.js — 案件の書類（報告書・見積書）と送付の記録（doc_shares）の読み書き
 const DocsApi = (() => {
   const ok = r => { if (r.error) throw r.error; return r.data; };
   const VIA = { share: 'スマホの共有', mail: 'メール', line: 'LINE', download: 'ダウンロード' };
   return {
     VIA,
     reports: async caseId => ok(await sb.from('reports').select('*').eq('case_id', caseId).order('created_at', { ascending: false })),
+    estimates: async caseId => ok(await sb.from('estimates').select('*').eq('case_id', caseId).order('created_at', { ascending: false })),
     shares: async caseId => ok(await sb.from('doc_shares').select('*').eq('case_id', caseId).order('sent_at', { ascending: false })),
     sharesOf: async (type, id) => ok(await sb.from('doc_shares').select('*').eq('doc_type', type).eq('doc_id', id).order('sent_at', { ascending: false })),
     // 今効いている一番新しい記録（「送っていないに戻す」をしたものは除く）。送った記録があればダウンロードより先に出す
@@ -30,7 +31,8 @@ const DocsApi = (() => {
       if (!url) throw new Error('PDFのリンクを作れませんでした');
       return { path, url };
     },
-    // 書類の名前（案件画面の一覧・プレビュー・共有の文面）
-    title: (type, row) => (type === 'report' ? ReportLogic.docLabel(row.work_type, row.data) : '書類')
+    // 書類の名前（案件画面の一覧・プレビュー・共有の文面）。見積書は「見積書 EST-… 第N版」、番号がまだなら「見積書（下書き）」
+    title: (type, row) => (type === 'report' ? ReportLogic.docLabel(row.work_type, row.data)
+      : type === 'estimate' ? (row.number ? '見積書 ' + row.number + ' 第' + row.version + '版' : '見積書（下書き）') : '書類')
   };
 })();

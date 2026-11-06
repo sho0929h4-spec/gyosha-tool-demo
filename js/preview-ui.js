@@ -1,6 +1,7 @@
-// js/preview-ui.js — 12 プレビューと共有（共通）。#doc/{type}/{id}
+// js/preview-ui.js — 12 プレビューと共有（共通）。#doc/{type}/{id}（type = report | estimate）
 //   PDF を端末の中で作り（進み: 準備／描画／保存）、作ったときのページの画像を <canvas> に出す（pdf.js は使わない）。
 //   編集に戻る／LINEで共有／メールで共有／PDFをダウンロード／送付の記録（送付済み（日時・手段）・送っていないに戻す）
+//   見積書: 共有・ダウンロードを記録したら、その版を発行済みにする（EstimatesApi.issue）。発行済みの版は「編集に戻る」の代わりに「新しい版を作って直す」
 const PreviewUi = (() => {
   let st = null; // { type, row, caseRow, label, blob, fname }
   const cache = new Map(); // 書類の id + updated_at → { blob, pages }（同じ内容なら作り直さない）
@@ -55,13 +56,19 @@ const PreviewUi = (() => {
       let hit = cache.get(key);
       if (!hit) {
         $('dv-progress').textContent = 'PDFを作成中…（準備）';
-        const photos = Array.isArray(s.row.photos) ? s.row.photos : [];
-        const photoUrls = await Promise.all(photos.map(p => signedUrl(p.path).catch(() => '')));
-        const show = ctx.org.show_company_on_report !== false;
-        const logoUrl = show && ctx.org.logo_path ? await signedUrl(ctx.org.logo_path).catch(() => '') : '';
-        let pages = [];
-        const blob = await ReportPdf.toBlob({ report: s.row, org: ctx.org, logoUrl, photoUrls, createdDate: ReportLogic.todayJa(new Date(s.row.data.pdf_at || s.row.updated_at)),
-          onStep: t => { if (st === s) $('dv-progress').textContent = 'PDFを作成中…（' + t + '）'; }, onPages: p => { pages = p; } });
+        let pages = [], blob;
+        const onStep = t => { if (st === s) $('dv-progress').textContent = 'PDFを作成中…（' + t + '）'; };
+        const onPages = p => { pages = p; };
+        if (s.type === 'estimate') {
+          const sealUrl = ctx.org.seal_path ? await signedUrl(ctx.org.seal_path).catch(() => '') : '';
+          blob = await EstimatePdf.toBlob({ estimate: s.row, org: ctx.org, sealUrl, onStep, onPages });
+        } else {
+          const photos = Array.isArray(s.row.photos) ? s.row.photos : [];
+          const photoUrls = await Promise.all(photos.map(p => signedUrl(p.path).catch(() => '')));
+          const show = ctx.org.show_company_on_report !== false;
+          const logoUrl = show && ctx.org.logo_path ? await signedUrl(ctx.org.logo_path).catch(() => '') : '';
+          blob = await ReportPdf.toBlob({ report: s.row, org: ctx.org, logoUrl, photoUrls, createdDate: ReportLogic.todayJa(new Date(s.row.data.pdf_at || s.row.updated_at)), onStep, onPages });
+        }
         hit = { blob, pages };
         cache.clear();
         cache.set(key, hit);
@@ -79,27 +86,51 @@ const PreviewUi = (() => {
     }
   }
 
+  // 見積書の発行済み・古い版は直せない（直すときは新しい版を作る）
+  function editBtns() {
+    const ro = st.type === 'estimate' && st.row.status !== 'draft';
+    $('dv-edit').hidden = ro;
+    $('dv-newver').hidden = !ro;
+  }
+  // 共有・ダウンロードを記録した: 見積書はその版を発行済みに（同じ系列の前の発行済みは古い版に）
+  async function recorded() {
+    const s = st;
+    if (s && s.type === 'estimate') {
+      try { await EstimatesApi.issue(s.row); s.row = (await EstimatesApi.get(s.row.id)) || s.row; }
+      catch (e) { toast('発行済みにできませんでした: ' + errText(e)); }
+      if (st === s) editBtns();
+    }
+    renderSent();
+  }
+
   function wire() {
     if (wired) return;
     wired = true;
     $('dv-retry').addEventListener('click', () => { if (st) makePdf(); });
     ['line', 'mail'].forEach(via => $('dv-' + via).addEventListener('click', () => {
       if (!st || !st.blob) return;
-      ShareUi.open({ via, type: st.type, docId: st.row.id, docLabel: st.label, caseRow: st.caseRow, blob: st.blob, onRecorded: renderSent });
+      ShareUi.open({ via, type: st.type, docId: st.row.id, docLabel: st.label, caseRow: st.caseRow, blob: st.blob, fileName: st.fname, onRecorded: recorded });
     }));
+    $('dv-newver').addEventListener('click', async () => {
+      if (!st) return;
+      $('dv-newver').disabled = true;
+      try { location.hash = '#estimate/' + (await EstimatesApi.createDraft(st.caseRow, st.row)).id; }
+      catch (e) { toast('新しい版を作れませんでした: ' + errText(e)); }
+      finally { $('dv-newver').disabled = false; }
+    });
     $('dv-dl').addEventListener('click', async () => {
       if (!st || !st.blob) return;
       const url = URL.createObjectURL(st.blob);
       const a = mk('a');
       a.href = url;
-      a.download = ShareLogic.fileName(st.label, st.caseRow);
+      a.download = st.fname;
       document.body.appendChild(a);
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       try { await DocsApi.record(st.caseRow.id, st.type, st.row.id, 'download', null); toast('PDFをダウンロードしました'); }
-      catch (e) { toast('ダウンロードの記録を残せませんでした: ' + errText(e)); }
-      renderSent();
+      catch (e) { toast('ダウンロードの記録を残せませんでした: ' + errText(e)); renderSent(); return; }
+      recorded();
     });
   }
 
@@ -112,16 +143,20 @@ const PreviewUi = (() => {
     $('dv-title').textContent = '';
     $('dv-sub').textContent = '';
     $('dv-progress').textContent = '';
+    $('dv-edit').hidden = $('dv-newver').hidden = true;
     showScreen('doc');
-    const r = await sb.from('reports').select('*').eq('id', id).maybeSingle();
+    const r = await sb.from(type === 'estimate' ? 'estimates' : 'reports').select('*').eq('id', id).maybeSingle();
     if (r.error) throw r.error;
     if (!r.data) { toast('書類が見つかりませんでした'); location.replace('#cases'); return; }
     const caseRow = (await CasesApi.get(r.data.case_id)) || {};
-    st = { type, row: r.data, caseRow, label: DocsApi.title(type, r.data), blob: null };
+    const label = DocsApi.title(type, r.data);
+    st = { type, row: r.data, caseRow, label, blob: null,
+      fname: type === 'estimate' ? EstimatePdf.fileName(r.data.data && r.data.data.subject) : ShareLogic.fileName(label, caseRow) };
     $('dv-title').textContent = st.label;
     $('dv-sub').textContent = CaseLogic.placeName(caseRow) + ' ・ ' + CaseLogic.md(r.data.created_at) + ' 作成';
     $('dv-back').href = '#case/' + caseRow.id;
     $('dv-edit').href = '#' + type + '/' + id;
+    editBtns();
     renderSent();
     await makePdf();
   }

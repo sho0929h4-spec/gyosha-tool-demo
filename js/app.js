@@ -1,5 +1,5 @@
 // js/app.js — ルーター（location.hash）と共通の道具: $, mk, dBtn, errText, askPopup, showScreen, toast
-//   #login #cases #case/new #case/{id} #case/{id}/edit #settings #report/{id} #doc/{type}/{id}
+//   #login #cases #case/new #case/{id} #case/{id}/edit #settings #report/{id} #estimate/{id} #estimate/{id}/import #doc/{type}/{id}
 //   ctx = { user, org, membership }（ログインしていなければ null）
 let ctx = null;
 
@@ -90,7 +90,9 @@ const App = (() => {
     [new RegExp('^#case/' + UUID + '$'), id => CaseUi.show(id)],
     [/^#settings$/, () => SettingsUi.show()],
     [new RegExp('^#report/' + UUID + '$'), id => ReportUi.show(id)],
-    [new RegExp('^#doc/(report)/' + UUID + '$'), (type, id) => PreviewUi.show(type, id)]
+    [new RegExp('^#estimate/' + UUID + '$'), id => EstimateUi.show(id)],
+    [new RegExp('^#estimate/' + UUID + '/import$'), id => EstimateImportUi.show(id)],
+    [new RegExp('^#doc/(report|estimate)/' + UUID + '$'), (type, id) => PreviewUi.show(type, id)]
   ];
   const leaveHooks = []; // 画面を離れる前（報告書の保存待ちなど）
   const onLeave = fn => leaveHooks.push(fn);

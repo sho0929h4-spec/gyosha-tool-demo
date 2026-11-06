@@ -1,5 +1,5 @@
 // js/share-ui.js — 13 共有シート（LINE／メール）。簡易版（業者ツール（簡易版）/js/share-ui.js）の openSheet を写して簡略化した。文面とファイル名は ShareLogic
-// ShareUi.open({ via: 'line'|'mail', type, docId, docLabel, caseRow, blob, onRecorded })
+// ShareUi.open({ via: 'line'|'mail', type, docId, docLabel, caseRow, blob, fileName?, onRecorded })（fileName が無ければ ShareLogic.fileName）
 //   シート（× だけで閉じる）: 押した手段の文面（LINE = 短め・件名なし／メール = 件名＋本文。直せる）→
 //   ファイルを渡せる端末（navigator.canShare({ files })）: 「PDF と文面を共有する」= PDF ファイル＋文面を端末の共有へ・「文面をコピー」
 //   それ以外（パソコン）: メール =「メールを開く」（mailto: 件名＋本文＋公開PDF のリンク）／LINE =「文面とリンクをコピー」・「LINEで開く」
@@ -29,7 +29,7 @@ const ShareUi = (() => {
     const line = o.via === 'line';
     const prev = document.getElementById('dsh-sheet');
     if (prev) prev.remove();
-    const fname = ShareLogic.fileName(o.docLabel, o.caseRow);
+    const fname = o.fileName || ShareLogic.fileName(o.docLabel, o.caseRow);
     const m0 = ctx.membership || {};
     const m1 = ShareLogic.message({ docLabel: o.docLabel, caseRow: o.caseRow, org: ctx.org || {}, me: { name: m0.display_name, tel: m0.phone }, short: line });
     const st = { file: new File([o.blob], fname, { type: 'application/pdf' }), url: '', pdfPath: null, sent: '', busy: false };

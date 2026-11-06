@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>お試し版 業者ツール</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/app.css?v=61ac80c">
+<link rel="stylesheet" href="css/app.css?v=ce2eff4">
 </head>
 <body>
 
@@ -84,7 +84,7 @@
   <div class="body">
     <div class="tools">
       <button class="tool" type="button" id="tool-report"><span class="tool-t">報告書</span><span class="tool-d">調査・工事の報告</span></button>
-      <button class="tool" type="button" disabled><span class="tool-t">見積書</span><span class="tool-d">準備中</span></button>
+      <button class="tool" type="button" id="tool-estimate"><span class="tool-t">見積書</span><span class="tool-d">定型・明細・版</span></button>
       <button class="tool" type="button" disabled><span class="tool-t">工事掲示</span><span class="tool-d">準備中</span></button>
       <button class="tool" type="button" disabled><span class="tool-t">図面</span><span class="tool-d">準備中</span></button>
     </div>
@@ -134,9 +134,38 @@
         <div id="sm-pw-msg" class="msg" role="status"></div>
       </div>
     </div>
-    <div class="card off">
-      <div class="card-t">見積書<span class="soon">準備中</span></div>
-      <div class="card-d">定型テンプレート（何行かのまとまり）・よく使う明細・単価マスタ・消費税率・見積書番号の始まり</div>
+    <div class="card" id="set-est">
+      <div class="card-t">見積書</div>
+      <div class="card-d">消費税率・定型テンプレート（何行かのまとまり）・よく使う明細・単価マスタの一覧</div>
+      <button class="btn ghost sm" type="button" id="set-est-open" aria-expanded="false">見積書の設定を編集</button>
+      <div id="set-est-form" class="body" style="padding:0" hidden>
+        <div class="ff"><label for="se-tax">消費税率（%）</label><input id="se-tax" type="number" inputmode="decimal" min="0" max="99" step="any"></div>
+        <button class="btn sm" type="button" id="se-tax-save">消費税率を保存</button>
+        <div id="se-tax-msg" class="msg" role="status"></div>
+        <div class="sep"></div>
+        <div class="grp-t">定型テンプレート</div>
+        <div class="hint">登録は見積書の画面の「この明細を定型に登録」から</div>
+        <div id="se-tpl" class="list"></div>
+        <div class="sep"></div>
+        <div class="grp-t">よく使う明細</div>
+        <div id="se-pre" class="list"></div>
+        <div class="ff"><label for="se-pre-text">摘要</label><input id="se-pre-text" type="text" maxlength="100" placeholder="例：養生費"></div>
+        <div class="grid2">
+          <div class="ff"><label for="se-pre-unit">単位</label><input id="se-pre-unit" type="text" maxlength="20" placeholder="式"></div>
+          <div class="ff"><label for="se-pre-price">原価の単価（円）</label><input id="se-pre-price" type="number" inputmode="numeric" min="0" step="1"></div>
+        </div>
+        <div class="hint">見積書には利益率をかけた額が入ります</div>
+        <button class="btn ghost sm" type="button" id="se-pre-add">よく使う明細を足す</button>
+        <div id="se-msg" class="msg" role="status"></div>
+        <div class="sep"></div>
+        <div class="grp-t">単価マスタ</div>
+        <div class="hint">仕入見積を読み込んだとき（原価）と、見積書のPDFを作ったとき（販売と原価）に自動でたまります。見積書の照合と「過去単価に合わせる」に使います</div>
+        <div class="seg" id="se-rate-kind"><button type="button" data-kind="cost" aria-pressed="true">原価</button><button type="button" data-kind="sell" aria-pressed="false">販売</button><button type="button" data-kind="" aria-pressed="false">すべて</button></div>
+        <input id="se-rate-q" type="search" aria-label="単価マスタを摘要・業者・物件で絞り込む" placeholder="摘要・業者・物件で絞り込む">
+        <div id="se-rate-count" class="hint"></div>
+        <div id="se-rate" class="list"></div>
+        <div id="se-rate-msg" class="msg" role="status"></div>
+      </div>
     </div>
     <div class="card off">
       <div class="card-t">元請（送り先）<span class="soon">準備中</span></div>
@@ -164,12 +193,49 @@
   </div>
 </section>
 
+<!-- 07 見積書 -->
+<section id="screen-estimate" class="screen white">
+  <div class="hd">
+    <button class="back" type="button" id="es-back" aria-label="戻る">‹</button>
+    <div class="hd-t"><div class="hd-title">見積書</div><div class="hd-sub" id="es-sub"></div></div>
+  </div>
+  <div class="body" id="es-body"></div>
+  <div class="foot">
+    <button id="es-draft" class="btn ghost" type="button" style="flex:1">下書き保存</button>
+    <button id="es-pdf" class="btn wide" type="button">PDFを作る → 共有</button>
+    <button id="es-newver" class="btn" type="button" style="flex:1" hidden>新しい版を作って直す</button>
+  </div>
+</section>
+
+<!-- 08 仕入見積の読み込み -->
+<section id="screen-import" class="screen white">
+  <div class="hd">
+    <button class="back" type="button" id="im-back" aria-label="戻る">‹</button>
+    <div class="hd-t"><div class="hd-title">仕入見積を読み込む</div><div class="hd-sub" id="im-sub"></div></div>
+  </div>
+  <div class="body">
+    <div class="card">
+      <button id="im-pick" class="btn" type="button">PDF・Excel を選ぶ</button>
+      <input id="im-file" type="file" accept=".pdf,.xlsx,.xlsm,.xls" hidden>
+      <button id="im-ai" class="btn ghost sm" type="button" disabled>AIで読む（準備中）</button>
+      <div class="hint">Excel はそのまま読みます。PDF は文字と位置から表を読みます（AIは使いません）。読めないところは、明細に入れてから手で直してください。</div>
+      <div class="ff"><label for="im-vendor">仕入業者名（社内用。見積書には出ません）</label><input id="im-vendor" type="text" maxlength="100" list="im-vendors" autocomplete="off" placeholder="例：山田内装"><datalist id="im-vendors"></datalist></div>
+      <div id="im-msg" class="msg" role="status"></div>
+    </div>
+    <div id="im-result" class="list" hidden></div>
+  </div>
+  <div class="foot">
+    <button id="im-put" class="btn wide" type="button" disabled>選んだ行を明細に入れる</button>
+  </div>
+</section>
+
 <!-- 12 プレビューと共有 -->
 <section id="screen-doc" class="screen">
   <div class="hd">
     <a class="back" id="dv-back" href="#cases" aria-label="戻る">‹</a>
     <div class="hd-t"><div class="hd-title" id="dv-title"></div><div class="hd-sub" id="dv-sub"></div></div>
     <a class="hd-btn" id="dv-edit" href="#cases">編集に戻る</a>
+    <button class="hd-btn" id="dv-newver" type="button" hidden>新しい版を作って直す</button>
   </div>
   <div class="body">
     <div id="dv-pages" class="dv-pages"></div>
@@ -191,25 +257,32 @@
 
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="js/fake-sb.js?v=61ac80c"></script>
-<script src="js/demo.js?v=61ac80c"></script>
-<script src="js/case-logic.js?v=61ac80c"></script>
-<script src="js/report-logic.js?v=61ac80c"></script>
-<script src="js/photo-marks.js?v=61ac80c"></script>
-<script src="js/app.js?v=61ac80c"></script>
-<script src="js/auth.js?v=61ac80c"></script>
-<script src="js/cases-api.js?v=61ac80c"></script>
-<script src="js/docs-api.js?v=61ac80c"></script>
-<script src="js/cases-ui.js?v=61ac80c"></script>
-<script src="js/case-form.js?v=61ac80c"></script>
-<script src="js/case-ui.js?v=61ac80c"></script>
-<script src="js/settings-ui.js?v=61ac80c"></script>
-<script src="js/photo-mark-editor.js?v=61ac80c"></script>
-<script src="js/report-pdf.js?v=61ac80c"></script>
-<script src="js/report-ui.js?v=61ac80c"></script>
-<script src="js/share-logic.js?v=61ac80c"></script>
-<script src="js/share-ui.js?v=61ac80c"></script>
-<script src="js/preview-ui.js?v=61ac80c"></script>
+<script src="js/fake-sb.js?v=ce2eff4"></script>
+<script src="js/demo.js?v=ce2eff4"></script>
+<script src="js/case-logic.js?v=ce2eff4"></script>
+<script src="js/report-logic.js?v=ce2eff4"></script>
+<script src="js/estimate-logic.js?v=ce2eff4"></script>
+<script src="js/estimate-import.js?v=ce2eff4"></script>
+<script src="js/pdfjs-loader.js?v=ce2eff4"></script>
+<script src="js/photo-marks.js?v=ce2eff4"></script>
+<script src="js/app.js?v=ce2eff4"></script>
+<script src="js/auth.js?v=ce2eff4"></script>
+<script src="js/cases-api.js?v=ce2eff4"></script>
+<script src="js/docs-api.js?v=ce2eff4"></script>
+<script src="js/estimates-api.js?v=ce2eff4"></script>
+<script src="js/cases-ui.js?v=ce2eff4"></script>
+<script src="js/case-form.js?v=ce2eff4"></script>
+<script src="js/case-ui.js?v=ce2eff4"></script>
+<script src="js/settings-ui.js?v=ce2eff4"></script>
+<script src="js/photo-mark-editor.js?v=ce2eff4"></script>
+<script src="js/report-pdf.js?v=ce2eff4"></script>
+<script src="js/estimate-pdf.js?v=ce2eff4"></script>
+<script src="js/report-ui.js?v=ce2eff4"></script>
+<script src="js/estimate-ui.js?v=ce2eff4"></script>
+<script src="js/estimate-import-ui.js?v=ce2eff4"></script>
+<script src="js/share-logic.js?v=ce2eff4"></script>
+<script src="js/share-ui.js?v=ce2eff4"></script>
+<script src="js/preview-ui.js?v=ce2eff4"></script>
 <script>App.start();</script>
 </body>
 </html>
