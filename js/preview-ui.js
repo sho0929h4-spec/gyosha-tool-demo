@@ -1,4 +1,4 @@
-// js/preview-ui.js — 12 プレビューと共有（共通）。#doc/{type}/{id}（type = report | estimate | notice）
+// js/preview-ui.js — 12 プレビューと共有（共通）。#doc/{type}/{id}（type = report | estimate | notice | drawing）
 //   PDF を端末の中で作り（進み: 準備／描画／保存）、作ったときのページの画像を <canvas> に出す（pdf.js は使わない）。
 //   編集に戻る／LINEで共有／メールで共有／PDFをダウンロード／送付の記録（送付済み（日時・手段）・送っていないに戻す）
 //   見積書: 共有・ダウンロードを記録したら、その版を発行済みにする（EstimatesApi.issue）。発行済みの版は「編集に戻る」の代わりに「新しい版を作って直す」
@@ -17,7 +17,7 @@ const PreviewUi = (() => {
       c.setAttribute('aria-label', (i + 1) + 'ページ目');
       host.appendChild(c);
       const img = new Image();
-      img.onload = () => { c.width = img.naturalWidth; c.height = img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0); };
+      img.onload = () => { c.width = img.naturalWidth; c.height = img.naturalHeight; c.style.aspectRatio = img.naturalWidth + ' / ' + img.naturalHeight; c.getContext('2d').drawImage(img, 0, 0); };
       img.src = src;
     });
   }
@@ -59,7 +59,10 @@ const PreviewUi = (() => {
         let pages = [], blob;
         const onStep = t => { if (st === s) $('dv-progress').textContent = 'PDFを作成中…（' + t + '）'; };
         const onPages = p => { pages = p; };
-        if (s.type === 'notice') {
+        if (s.type === 'drawing') {
+          const imgUrl = await signedUrl(s.row.image_path, 'drawings');
+          blob = await DrawingPdf.toBlob({ drawing: s.row, imgUrl, caseRow: s.caseRow, org: ctx.org, onStep, onPages });
+        } else if (s.type === 'notice') {
           blob = await NoticePdf.toBlob({ notice: s.row, org: ctx.org, onStep, onPages });
         } else if (s.type === 'estimate') {
           const sealUrl = ctx.org.seal_path ? await signedUrl(ctx.org.seal_path).catch(() => '') : '';
@@ -147,7 +150,7 @@ const PreviewUi = (() => {
     $('dv-progress').textContent = '';
     $('dv-edit').hidden = $('dv-newver').hidden = true;
     showScreen('doc');
-    const r = await sb.from({ report: 'reports', estimate: 'estimates', notice: 'notices' }[type]).select('*').eq('id', id).maybeSingle();
+    const r = await sb.from({ report: 'reports', estimate: 'estimates', notice: 'notices', drawing: 'drawings' }[type]).select('*').eq('id', id).maybeSingle();
     if (r.error) throw r.error;
     if (!r.data) { toast('書類が見つかりませんでした'); location.replace('#cases'); return; }
     let caseRow = (await CasesApi.get(r.data.case_id)) || {};
@@ -156,7 +159,7 @@ const PreviewUi = (() => {
     if (type === 'notice') caseRow = Object.assign({}, caseRow, { name: d.propertyName || caseRow.name, room: d.roomNo || caseRow.room });
     const label = DocsApi.title(type, r.data);
     st = { type, row: r.data, caseRow, label, blob: null,
-      fname: type === 'estimate' ? EstimatePdf.fileName(d.subject) : type === 'notice' ? NoticeLogic.fileName(d) : ShareLogic.fileName(label, caseRow) };
+      fname: type === 'estimate' ? EstimatePdf.fileName(d.subject) : type === 'notice' ? NoticeLogic.fileName(d) : type === 'drawing' ? DrawingLogic.fileName(caseRow) : ShareLogic.fileName(label, caseRow) };
     $('dv-title').textContent = st.label;
     $('dv-sub').textContent = CaseLogic.placeName(caseRow) + ' ・ ' + CaseLogic.md(r.data.created_at) + ' 作成';
     $('dv-back').href = '#case/' + caseRow.id;

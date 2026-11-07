@@ -299,7 +299,11 @@
   const formatNumber = n => 'EST-' + String(num(n)).padStart(10, '0');
   // その地域の日付 'YYYY-MM-DD'（toISOString は UTC になって日付がずれる）
   const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-  const defaultDue = today => ymd(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 14));
+  // 有効期限の既定は今日から1か月（ユーザー決定 2026-11-07。元のツールは14日）。翌月に同じ日が無ければ翌月の末日
+  const defaultDue = today => {
+    const end = new Date(today.getFullYear(), today.getMonth() + 2, 0).getDate();
+    return ymd(new Date(today.getFullYear(), today.getMonth() + 1, Math.min(today.getDate(), end)));
+  };
   // estimates.data の最初の形（宛先・件名は案件から、担当者は自分、会社は写し）
   function newData(caseRow, org, me, today) {
     const c = caseRow || {}, g = org || {};

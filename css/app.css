@@ -103,6 +103,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .modal-x { width: 44px; height: 44px; border: 0; background: none; font-size: 24px; cursor: pointer; flex: none; }
 .modal-act { display: flex; gap: 8px; }
 .modal-act > * { flex: 1; }
+.modal-act.col { flex-direction: column; }
+.btn.danger { color: #b00; border-color: #e3a3a3; }
 .ask-pop-t { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* 小さい知らせ */
@@ -186,3 +188,24 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 /* プレビュー（12） */
 .dv-pages { display: flex; flex-direction: column; gap: 12px; }
 .dv-page { width: 100%; height: auto; display: block; background: #fff; border: 1px solid #ccc; aspect-ratio: 210 / 297; }
+
+/* 図面（10） */
+.col-gap { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.dw-parts { display: flex; gap: 6px; }
+.dw-part { flex: 1; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid #bbb; border-radius: 8px; background: #fff; font-size: 15px; cursor: pointer; padding: 0 4px; }
+.dw-part[aria-pressed="true"] { border: 2px solid var(--c); background: color-mix(in srgb, var(--c) 12%, #fff); font-weight: 700; }
+.dw-sw { width: 14px; height: 14px; border-radius: 3px; flex: none; }
+.dw-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.dw-tools > .seg { flex: 1 1 200px; min-width: 0; }
+.dw-tools > .btn { flex: 1 1 auto; padding: 0 8px; }
+.dw-hint { font-size: 12px; color: #555; min-height: 18px; overflow-wrap: anywhere; }
+.dw-stage { position: relative; overflow: hidden; background: #f0f0f0; border: 1px solid #ccc; border-radius: 8px; min-height: 120px; display: flex; justify-content: center; }
+.dw-pz { position: relative; display: inline-block; max-width: 100%; line-height: 0; }
+.dw-pz img { display: block; max-width: 100%; max-height: 70vh; width: auto; height: auto; -webkit-user-drag: none; user-select: none; }
+.dw-pz svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+.dw-stage.move .dw-pz svg { cursor: move; }
+.dw-poly { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.dw-poly > span { flex: 1 1 140px; min-width: 0; }
+.dw-poly .btn { flex: none; }
+.dw-legend { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.dw-li { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; min-width: 0; }

@@ -1,5 +1,5 @@
 // js/app.js — ルーター（location.hash）と共通の道具: $, mk, dBtn, errText, askPopup, showScreen, toast
-//   #login #cases #case/new #case/{id} #case/{id}/edit #settings #report/{id} #estimate/{id} #estimate/{id}/import #notice/{id} #doc/{type}/{id}
+//   #login #cases #case/new #case/{id} #case/{id}/edit #settings #report/{id} #estimate/{id} #estimate/{id}/import #notice/{id} #drawing/{id} #doc/{type}/{id}
 //   ctx = { user, org, membership }（ログインしていなければ null）
 let ctx = null;
 
@@ -38,6 +38,7 @@ function toast(text) {
 // 確認のポップアップ（confirm() の代わり）。OK = true、× と「キャンセル」= false。外側のクリックや Esc では閉じない
 //   askPopup(text, { title, okLabel, cancelLabel, danger, id }) → Promise<boolean>
 //   input: { label, value, placeholder } を渡すと欄を1つ出し、OK = 入れた文字（前後の空白を除く）、× と「キャンセル」= null
+//   more: [{ label, value, id, danger }] を渡すと OK の上にボタンを足し、押すと { more: value }（図面の印の「削除」など）
 function askPopup(text, opts) {
   const o = opts || {};
   const prev = document.getElementById('ask-pop');
@@ -87,6 +88,11 @@ function askPopup(text, opts) {
       f.append(l, inp);
       dlg.appendChild(f);
     }
+    if (o.more && o.more.length) {
+      const mr = mk('div', 'modal-act col');
+      o.more.forEach(m => { const b = dBtn(m.label, 'btn ghost sm' + (m.danger ? ' danger' : ''), () => done({ more: m.value })); if (m.id) b.id = m.id; mr.appendChild(b); });
+      dlg.appendChild(mr);
+    }
     dlg.appendChild(act);
     bg.appendChild(dlg);
     bg._done = v => done(o.input && v === false ? null : v);
@@ -108,7 +114,8 @@ const App = (() => {
     [new RegExp('^#estimate/' + UUID + '$'), id => EstimateUi.show(id)],
     [new RegExp('^#estimate/' + UUID + '/import$'), id => EstimateImportUi.show(id)],
     [new RegExp('^#notice/' + UUID + '$'), id => NoticeUi.show(id)],
-    [new RegExp('^#doc/(report|estimate|notice)/' + UUID + '$'), (type, id) => PreviewUi.show(type, id)]
+    [new RegExp('^#drawing/' + UUID + '$'), id => DrawingUi.show(id)],
+    [new RegExp('^#doc/(report|estimate|notice|drawing)/' + UUID + '$'), (type, id) => PreviewUi.show(type, id)]
   ];
   const leaveHooks = []; // 画面を離れる前（報告書の保存待ちなど）
   const onLeave = fn => leaveHooks.push(fn);
@@ -190,10 +197,10 @@ function shrinkImage(file, maxEdge, type, quality) {
     img.src = url;
   });
 }
-// Storage の非公開ファイル（photos）の見るための URL（1時間）
-async function signedUrl(path) {
+// Storage の非公開ファイル（photos。図面は bucket = 'drawings'）の見るための URL（1時間）
+async function signedUrl(path, bucket) {
   if (!path) return '';
-  const { data, error } = await sb.storage.from('photos').createSignedUrl(path, 3600);
+  const { data, error } = await sb.storage.from(bucket || 'photos').createSignedUrl(path, 3600);
   if (error) throw error;
   return data.signedUrl;
 }
