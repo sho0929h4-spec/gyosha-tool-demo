@@ -1,4 +1,4 @@
-// js/case-ui.js — 04 案件画面: 4つのツール（報告書・見積書・工事掲示・図面）＋この案件の書類（種類の札・名前・作成日・送付の状態）
+// js/case-ui.js — 04 案件画面: 上の帯の下に日程の行（調査・工事）・4つのツール（報告書・見積書・工事掲示・図面）＋この案件の書類（種類の札・名前・作成日・送付の状態）
 const CaseUi = (() => {
   let cur = null, wired = false;
   const KIND = { report: '報告書', estimate: '見積書', notice: '工事掲示', drawing: '図面' };
@@ -49,6 +49,9 @@ const CaseUi = (() => {
     $('case-title').textContent = CaseLogic.placeName(c);
     $('case-sub').textContent = [CaseLogic.clientLine(c), c.address].filter(Boolean).join(' ・ ');
     $('case-edit').href = '#case/' + c.id + '/edit';
+    const when = CaseLogic.calLine(c);
+    $('case-cal').hidden = !when;
+    $('case-cal').textContent = when;
     $('case-memo').hidden = !c.memo;
     $('case-memo-t').textContent = c.memo || '';
     try {

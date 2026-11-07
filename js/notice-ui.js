@@ -31,8 +31,8 @@ const NoticeUi = (() => {
     const s = st;
     clearTimeout(s.timer);
     if (extra) Object.assign(s.d, extra);
+    while (s.saving) await s.saving.catch(() => {}); // 保存中なら終わるまで待つ（PDF の前に古い行を読まない）
     if (!s.dirty && !extra) return;
-    while (s.saving) await s.saving.catch(() => {});
     s.dirty = false;
     s.saving = (async () => {
       const { error } = await sb.from('notices').update({ data: s.d }).eq('id', s.row.id);

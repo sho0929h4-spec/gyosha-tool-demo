@@ -165,6 +165,17 @@
     const vals = { f1: str(d.f1), note: str(d.note), f2: str(d.f2), f4: str(d.f4), leak: str(d.leak), leakAction: leakActionText(d), reason: str(d.reason), afterStatus: afterStatusText(d) };
     return MODES[modeOf(mode)].rRows.filter(r => vals[r.field]).map(r => ({ label: r.label, value: vals[r.field], next: !!r.next }));
   }
+  // 紙面の編集パネル（report-sheet-ui）で直せる欄。afterStatus は表示だけ（afterStatusSel＋afterNote から作る）
+  const SHEET_FIELDS = ['f1', 'leak', 'leakAction', 'f2', 'reason', 'f4', 'note', 'afterStatusSel', 'afterNote'];
+  const setField = (d, field, value) => (SHEET_FIELDS.includes(field) ? Object.assign({}, d, { [field]: value == null ? '' : String(value) }) : d);
+  // 写真の並べ替え（dir = -1 前へ／1 後へ。端では何もしない）・外す。どちらも新しい配列
+  function movePhoto(photos, i, dir) {
+    const a = arr(photos).slice(), j = i + dir;
+    if (i < 0 || i >= a.length || j < 0 || j >= a.length) return a;
+    [a[i], a[j]] = [a[j], a[i]];
+    return a;
+  }
+  const removePhoto = (photos, i) => arr(photos).filter((_, k) => k !== i);
   // 確認（注意だけ。report-tool の validate の文言。必須の不備と、確認が推奨される項目の順）
   function validate(d, mode, nPhotos) {
     const cfg = MODES[modeOf(mode)];
@@ -185,7 +196,7 @@
   const docLabel = (mode, d) => modeName(mode, d) + '報告書';
 
   const api = { WTYPE_MODE, MODE_LABEL, INV_ITEMS, RESTORE_PLACES, RESTORE_PARTS, AFTER_STATUS, LEAK, LEAK_ACTION, WORK_CHECKLISTS, NOTICE_REMOVED, KEY_CHECKLIST, MODES, HINT, PHASES, PHASE_COLORS,
-    modeOf, modeName, newData, checkedItems, leakActionText, afterStatusText, timeStr, fmtDate, todayJa, workItems, workChecked, keyChecked, resultRows, validate, docLabel };
+    modeOf, modeName, newData, checkedItems, leakActionText, afterStatusText, timeStr, fmtDate, todayJa, workItems, workChecked, keyChecked, resultRows, validate, docLabel, setField, movePhoto, removePhoto };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ReportLogic = api;
 })(typeof window !== 'undefined' ? window : globalThis);

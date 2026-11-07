@@ -32,7 +32,21 @@
   const md = iso => { const p = parts(iso); return p ? `${p.month}/${p.day}` : ''; };
   const mdhm = iso => { const p = parts(iso); return p ? `${p.month}/${p.day} ${Number(p.hour)}:${p.minute}` : ''; };
 
-  const api = { roomLabel, placeName, matches, clientLine, md, mdhm };
+  // 日本時間の日 'YYYY-MM-DD'（ISO の日時から）・'M/D（曜）'（'YYYY-MM-DD' から）
+  const jstYmd = v => { const t = new Date(v).getTime(); return isNaN(t) ? '' : new Date(t + 9 * 3600000).toISOString().slice(0, 10); };
+  const mdw = ymd => { const d = new Date(ymd + 'T00:00:00Z'); return `${d.getUTCMonth() + 1}/${d.getUTCDate()}（${'日月火水木金土'[d.getUTCDay()]}）`; };
+  // 日程の行: 「調査 11/8（日）10:00 ・ 工事 11/12（木）〜11/14（土）」。無い項目は出さない。今日の分（工事は期間の中）は頭に「今日 」
+  function calLine(c, today) {
+    const t = jstYmd(today == null ? Date.now() : today);
+    const out = [];
+    const s = c && c.survey_at ? jstYmd(c.survey_at) : '';
+    if (s) out.push((s === t ? '今日 ' : '') + '調査 ' + mdw(s) + mdhm(c.survey_at).split(' ')[1]);
+    const a = str(c && c.work_start), b = str(c && c.work_end) || a;
+    if (a) out.push((a <= t && t <= b ? '今日 ' : '') + '工事 ' + mdw(a) + (b > a ? '〜' + mdw(b) : ''));
+    return out.join(' ・ ');
+  }
+
+  const api = { roomLabel, placeName, matches, clientLine, md, mdhm, jstYmd, calLine };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CaseLogic = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1,4 +1,4 @@
-// js/docs-api.js — 案件の書類（報告書・見積書・工事掲示・図面）と送付の記録（doc_shares）の読み書き
+// js/docs-api.js — 案件の書類（報告書・見積書・工事掲示・図面）と送付の記録（doc_shares。日報の記録は case_id が null）の読み書き
 const DocsApi = (() => {
   const ok = r => { if (r.error) throw r.error; return r.data; };
   const VIA = { share: 'スマホの共有', mail: 'メール', line: 'LINE', download: 'ダウンロード' };
@@ -36,6 +36,6 @@ const DocsApi = (() => {
     // 書類の名前（案件画面の一覧・プレビュー・共有の文面）。見積書は「見積書 EST-… 第N版」、番号がまだなら「見積書（下書き）」。工事掲示は「工事掲示 302号室」、図面は「図面」
     title: (type, row) => (type === 'report' ? ReportLogic.docLabel(row.work_type, row.data)
       : type === 'estimate' ? (row.number ? '見積書 ' + row.number + ' 第' + row.version + '版' : '見積書（下書き）')
-      : type === 'notice' ? NoticeLogic.docLabel(row.data) : type === 'drawing' ? '図面' : '書類')
+      : type === 'notice' ? NoticeLogic.docLabel(row.data) : type === 'drawing' ? '図面' : type === 'daily' ? DailyLogic.title(row) : '書類')
   };
 })();

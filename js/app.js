@@ -1,5 +1,5 @@
-// js/app.js — ルーター（location.hash）と共通の道具: $, mk, dBtn, errText, askPopup, showScreen, toast
-//   #login #cases #case/new #case/{id} #case/{id}/edit #settings #report/{id} #estimate/{id} #estimate/{id}/import #notice/{id} #drawing/{id} #doc/{type}/{id}
+// js/app.js — ルーター（location.hash）と共通の道具: $, mk, dBtn, errText, askPopup, showScreen, toast, renderTabs
+//   #login #cases #calendar #daily #daily/{id} #case/new #case/{id} #case/{id}/edit #settings #report/{id} #estimate/{id} #estimate/{id}/import #notice/{id} #drawing/{id} #doc/{type}/{id}
 //   ctx = { user, org, membership }（ログインしていなければ null）
 let ctx = null;
 
@@ -25,6 +25,19 @@ function errText(e) {
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === 'screen-' + id));
   window.scrollTo(0, 0);
+}
+// 画面下に固定のタブ（02 案件一覧・カレンダー・日報）。<nav class="tabs" data-active="cases"> に入れる。今いる所は太字＋下線（aria-current）
+const TABS = [['cases', '案件一覧'], ['calendar', 'カレンダー'], ['daily', '日報']];
+function renderTabs() {
+  document.querySelectorAll('nav.tabs').forEach(nav => {
+    nav.replaceChildren(...TABS.map(([k, label]) => {
+      const a = mk('a', 'tab', label);
+      a.href = '#' + k;
+      a.id = nav.dataset.active + '-tab-' + k;
+      if (k === nav.dataset.active) a.setAttribute('aria-current', 'page');
+      return a;
+    }));
+  });
 }
 let toastTimer = null;
 function toast(text) {
@@ -106,6 +119,9 @@ const App = (() => {
   const ROUTES = [
     [/^#login$/, () => AuthUi.show()],
     [/^#cases$/, () => CasesUi.show()],
+    [/^#calendar$/, () => CalendarUi.show()],
+    [/^#daily$/, () => DailyUi.list()],
+    [new RegExp('^#daily/' + UUID + '$'), id => DailyUi.show(id)],
     [/^#case\/new$/, () => CaseForm.show(null)],
     [new RegExp('^#case/' + UUID + '/edit$'), id => CaseForm.show(id)],
     [new RegExp('^#case/' + UUID + '$'), id => CaseUi.show(id)],
@@ -115,7 +131,7 @@ const App = (() => {
     [new RegExp('^#estimate/' + UUID + '/import$'), id => EstimateImportUi.show(id)],
     [new RegExp('^#notice/' + UUID + '$'), id => NoticeUi.show(id)],
     [new RegExp('^#drawing/' + UUID + '$'), id => DrawingUi.show(id)],
-    [new RegExp('^#doc/(report|estimate|notice|drawing)/' + UUID + '$'), (type, id) => PreviewUi.show(type, id)]
+    [new RegExp('^#doc/(report|estimate|notice|drawing|daily)/' + UUID + '$'), (type, id) => PreviewUi.show(type, id)]
   ];
   const leaveHooks = []; // 画面を離れる前（報告書の保存待ちなど）
   const onLeave = fn => leaveHooks.push(fn);
@@ -154,6 +170,7 @@ const App = (() => {
     location.hash = '#cases';
   }
   async function start() {
+    renderTabs();
     sb.auth.onAuthStateChange((ev, session) => {
       if (ev === 'SIGNED_OUT') { ctx = null; location.hash = '#login'; }
       if (ev === 'PASSWORD_RECOVERY') AuthUi.recovery();

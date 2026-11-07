@@ -1,5 +1,5 @@
 // js/share-ui.js — 13 共有シート（LINE／メール）。簡易版（業者ツール（簡易版）/js/share-ui.js）の openSheet を写して簡略化した。文面とファイル名は ShareLogic
-// ShareUi.open({ via: 'line'|'mail', type, docId, docLabel, caseRow, blob, fileName?, onRecorded })（fileName が無ければ ShareLogic.fileName）
+// ShareUi.open({ via: 'line'|'mail', type, docId, docLabel, caseRow, blob, fileName?, onRecorded })（fileName が無ければ ShareLogic.fileName。日報は caseRow が null）
 //   シート（× だけで閉じる）: 押した手段の文面（LINE = 短め・件名なし／メール = 件名＋本文。直せる）→
 //   ファイルを渡せる端末（navigator.canShare({ files })）: 「PDF と文面を共有する」= PDF ファイル＋文面を端末の共有へ・「文面をコピー」
 //   それ以外（パソコン）: メール =「メールを開く」（mailto: 件名＋本文＋公開PDF のリンク）／LINE =「文面とリンクをコピー」・「LINEで開く」
@@ -80,7 +80,7 @@ const ShareUi = (() => {
     const okLine = t => mk('div', 'msg ok', t);
     async function record(via) {
       if (st.sent) return;
-      await DocsApi.record(o.caseRow.id, o.type, o.docId, via, st.pdfPath);
+      await DocsApi.record(o.caseRow ? o.caseRow.id : null, o.type, o.docId, via, st.pdfPath);
       st.sent = via;
       out.appendChild(okLine('送付済みにしました（' + ShareLogic.viaLabel(via) + '）'));
       if (o.onRecorded) o.onRecorded();
@@ -117,7 +117,7 @@ const ShareUi = (() => {
     const sendMail = () => run(async () => {
       const url = await ensureLink();
       const m = cur();
-      const built = ShareLogic.buildMailto({ to: o.caseRow.client_email || '', subject: m.subject, body: m.body, link: o.docLabel + 'PDF: ' + url });
+      const built = ShareLogic.buildMailto({ to: (o.caseRow && o.caseRow.client_email) || '', subject: m.subject, body: m.body, link: o.docLabel + 'PDF: ' + url });
       out.replaceChildren(okLine('メールアプリを開きました。送信してください' + (built.shortened ? '（本文が長いため短くしています）' : '')));
       api.openUrl(built.url);
       await record('mail');

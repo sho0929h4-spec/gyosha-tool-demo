@@ -1,4 +1,4 @@
-// js/report-ui.js — 06 報告書: 作業区分 → 基本情報（物件名・号室は案件から）→ 区分ごとの欄 → 写真（撮影/アルバム・区分・印つけ）→ チェックリスト → 確認 → 下書き保存／PDFを作る
+// js/report-ui.js — 06 報告書: 作業区分 → 基本情報（物件名・号室は案件から）→ 区分ごとの欄 → 写真（撮影/アルバム・区分・印つけ）→ チェックリスト → 確認 → 下書き保存／紙面を見る
 // 項目・文言・規則は ReportLogic（report-tool の MODES）。入力は 1.5秒で自動保存（reports.work_type / data / photos）。写真は Storage photos（{org}/reports/{報告書}/{uuid}.jpg）
 const ReportUi = (() => {
   const RL = ReportLogic;
@@ -91,6 +91,7 @@ const ReportUi = (() => {
     const e = document.createElement('select');
     e.id = id;
     [['', '— 選択してください —'], ...options].forEach(([v, t]) => e.appendChild(new Option(t, v)));
+    if (st.d[key] && !options.some(([v]) => v === st.d[key])) e.appendChild(new Option(st.d[key], st.d[key])); // 紙面（report-sheet-ui）で自由に書いた値も出す
     e.value = st.d[key] || '';
     e.addEventListener('change', () => { st.d[key] = e.value; changed(); if (rerender) render(); });
     return e;

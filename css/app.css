@@ -5,9 +5,9 @@ body { margin: 0; max-width: 100%; }
 body { font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; color: #222; background: #f4f4f4; font-size: 15px; line-height: 1.5; }
 a { color: #222; text-decoration: none; }
 button, input, select, textarea { font-family: inherit; color: #222; }
-input[type=text], input[type=email], input[type=password], input[type=search], input[type=date], input[type=time], input[type=tel], input[type=number], select, textarea {
+input[type=text], input[type=email], input[type=password], input[type=search], input[type=date], input[type=datetime-local], input[type=time], input[type=tel], input[type=number], select, textarea {
   width: 100%; min-width: 0; font-size: 16px; border: 1px solid #bbb; border-radius: 8px; background: #fff; }
-input[type=text], input[type=email], input[type=password], input[type=search], input[type=date], input[type=time], input[type=tel], input[type=number], select { height: 48px; padding: 0 12px; }
+input[type=text], input[type=email], input[type=password], input[type=search], input[type=date], input[type=datetime-local], input[type=time], input[type=tel], input[type=number], select { height: 48px; padding: 0 12px; }
 textarea { padding: 10px 12px; resize: vertical; line-height: 1.6; }
 input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid #1e5bb8; outline-offset: 1px; }
 [hidden] { display: none !important; }
@@ -228,3 +228,70 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .es-sp-nums { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .es-sp-nums input { padding: 0 8px; }
 .es-scale .pd-hanko { object-fit: contain; } /* 画面だけ。PDF は waitImages で縦横の比を合わせる */
+
+/* 画面下のタブ（02 案件一覧・カレンダー） */
+.tabs { display: flex; margin: 0 -16px calc(-16px - env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); border-top: 1px solid #eee; }
+.tab { flex: 1; min-height: 52px; display: flex; align-items: center; justify-content: center; font-size: 15px; color: #555; }
+.tab[aria-current="page"] { color: #222; font-weight: 700; text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 2px; }
+.foot.col .tabs { margin-top: 4px; }
+.foot.tabs-foot { padding-top: 0; }
+.foot.tabs-foot .tabs { flex: 1; margin-top: 0; border-top: 0; }
+
+/* 日報の対応現場 */
+.dl-sites { display: flex; flex-direction: column; }
+.dl-site { min-width: 0; overflow-wrap: anywhere; }
+
+/* 案件の日程（03 の工事日・04 の上の帯の下の行・優先順の行） */
+.cf-work { display: flex; align-items: center; gap: 6px; }
+.cf-work input { flex: 1; }
+.case-cal { padding: 8px 16px; background: #fff; border-bottom: 1px solid #ddd; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.item-w { font-size: 14px; font-weight: 600; color: #1e5bb8; overflow-wrap: anywhere; }
+.cal-sec { margin-top: 8px; }
+
+/* カレンダー（genba-docs のを写した。帯の色: 調査 #1e5bb8・工事 #d97b1c = 図面の天井・壁と同じ） */
+.cal { --cal-line: #e3e8ef; position: relative; background: #fff; border: 1px solid #ddd; border-radius: 10px; overflow: hidden; margin: 0 -8px; }
+.cal-top { position: relative; display: flex; align-items: center; gap: 4px; padding: 4px 6px; min-height: 52px; }
+.cal-title { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 10px; border: 0; background: none; border-radius: 8px; font-size: 20px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.cal-caret { font-size: 13px; color: #555; }
+.cal-sp { flex: 1; min-width: 0; }
+.cal-nav { width: 44px; height: 44px; border: 0; border-radius: 50%; background: none; font-size: 24px; line-height: 1; cursor: pointer; }
+.cal-today { min-height: 44px; padding: 0 12px; border: 1px solid #bbb; border-radius: 8px; background: #fff; font-size: 14px; cursor: pointer; }
+.cal-menu { position: absolute; left: 6px; top: 50px; z-index: 30; background: #fff; border: 1px solid #ddd; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,.18), 0 6px 16px rgba(0,0,0,.12); padding: 4px; display: grid; min-width: 140px; }
+.cal-menu-i { min-height: 44px; padding: 0 14px; border: 0; background: none; text-align: left; font-size: 15px; border-radius: 8px; cursor: pointer; }
+.cal-menu-i.on { background: #eee; font-weight: 700; }
+.cal-wd { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; font-size: 12px; color: #555; padding: 2px 0 6px; border-bottom: 1px solid var(--cal-line); }
+.cal-wd .on { color: #222; font-weight: 800; }
+.cal-wk { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-bottom: 1px solid var(--cal-line); overflow: hidden; }
+.cal-wk:last-child { border-bottom: 0; }
+.cal-day { grid-row: 1 / -1; border: 0; border-left: 1px solid var(--cal-line); background: none; padding: 3px 0 0; display: flex; justify-content: center; align-items: flex-start; cursor: pointer; min-width: 0; }
+.cal-day:first-of-type { border-left: 0; }
+.cal-dn { display: grid; place-items: center; min-width: 22px; height: 22px; border-radius: 11px; font-size: 13px; }
+.cal-day.out .cal-dn { color: #a3afbf; }
+.cal-day.today .cal-dn { background: #222; color: #fff; font-weight: 700; }
+.cal-ev { position: relative; z-index: 1; display: flex; align-items: center; gap: 4px; min-width: 0; height: 17px; margin: 0 2px 2px; padding: 0 4px; border: 0; border-radius: 4px; color: #fff; font-size: 11px; font-weight: 700; line-height: 17px; text-align: left; white-space: nowrap; overflow: hidden; cursor: pointer; }
+.cal-ev.k-survey { background: #1e5bb8; }
+.cal-ev.k-work { background: #d97b1c; color: #222; } /* 白文字だとコントラストが足りない */
+.cal-ev.cl { margin-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.cal-ev.cr { margin-right: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.cal-ev-t { overflow: hidden; text-overflow: clip; min-width: 0; flex: 0 1 auto; }
+.cal-more { position: relative; z-index: 1; align-self: center; justify-self: start; min-width: 0; height: 17px; padding: 0 4px; border: 0; background: none; color: #555; font-size: 11px; font-weight: 800; line-height: 17px; cursor: pointer; }
+.cal-wh { display: grid; grid-template-columns: 44px repeat(7, minmax(0, 1fr)); padding: 2px 0 4px; }
+.cal-whd { display: grid; justify-items: center; gap: 2px; padding: 2px 0; min-width: 0; }
+.cal-whw { font-size: 12px; color: #555; }
+.cal-whn { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; font-size: 18px; }
+.cal-whd.today .cal-whw { color: #222; font-weight: 800; }
+.cal-whd.today .cal-whn { background: #222; color: #fff; font-weight: 600; }
+.cal-allday { display: grid; grid-template-columns: 44px repeat(7, minmax(0, 1fr)); padding-bottom: 4px; border-bottom: 1px solid var(--cal-line); box-shadow: 0 2px 4px rgba(0,0,0,.06); position: relative; z-index: 2; background: #fff; }
+.cal-scroll { overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.cal-tg { position: relative; display: grid; grid-template-columns: 44px repeat(7, minmax(0, 1fr)); }
+.cal-hours { position: relative; }
+.cal-hl { position: absolute; right: 6px; transform: translateY(-50%); font-size: 11px; color: #555; white-space: nowrap; }
+.cal-col { position: relative; min-width: 0; border-left: 1px solid var(--cal-line); background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 43px, var(--cal-line) 43px, var(--cal-line) 44px); background-position: 0 8px; background-repeat: no-repeat; background-size: 100% 1056px; }
+.cal-col::before { content: ""; position: absolute; left: 0; right: 0; top: 8px; border-top: 1px solid var(--cal-line); }
+.cal-ev.box { position: absolute; display: block; height: auto; margin: 0; padding: 2px 4px; border-radius: 6px; white-space: normal; line-height: 1.25; font-size: 11px; overflow: hidden; }
+.cal-ev.box .cal-ev-t, .cal-ev-tm { display: block; overflow: hidden; overflow-wrap: anywhere; }
+.cal-ev-tm { font-weight: 500; opacity: .9; }
+.cal-ev.box.narrow { padding: 2px; }
+.cal-ev.box.narrow .cal-ev-t, .cal-ev.box.narrow .cal-ev-tm { white-space: nowrap; overflow-wrap: normal; }
+.cal-now { position: absolute; left: -1px; right: 0; height: 0; border-top: 2px solid #b00; z-index: 3; pointer-events: none; }
+.cal-now::before { content: ""; position: absolute; left: -6px; top: -7px; width: 12px; height: 12px; border-radius: 50%; background: #b00; }

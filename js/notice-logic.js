@@ -129,7 +129,7 @@
     return {
       propertyName: str(c.name), addressee: '', addresseeEdited: false,
       noticeYear: String(t.getFullYear()), noticeMonth: String(t.getMonth() + 1), noticeDay: '', noticeKichijitsu: true,
-      workDate: '', workDateEnd: '', workDateTbd: false, timeStart: '', timeEnd: '', timePlanned: true,
+      workDate: str(c.work_start), workDateEnd: str(c.work_end), workDateTbd: false, timeStart: '', timeEnd: '', timePlanned: true,
       roomNo: str(c.room), workName: '復旧工事', workTypes, drainRooms: '', otherWorkText: '', otherNotice: '',
       contactCompany: str(o.name), contactAddress: str(o.address), contactTel: str(o.tel), overrides: {}
     };

@@ -1,4 +1,4 @@
-// js/notice-pdf.js — 工事掲示の紙面（A4縦1枚。css/notice.css）を組み、PDF（Blob）にする。window.NoticePdf = { build, fit, toBlob }
+// js/notice-pdf.js — 工事掲示の紙面（A4縦1枚。css/notice.css）を組み、PDF（Blob）にする。window.NoticePdf = { build, fit, toBlob, sheetBlob }
 // 紙面の組み方は元の工事掲示PDF作成 app.js の render・setSlot・renderBodyText・renderDetailValue（移植メモ §4.4・§4.5）、PDF は §4.8 を写した:
 //   .capturing を付けて html2canvas scale 3 → jsPDF A4縦 addImage(PNG, 0,0,210,297, undefined, 'FAST')（'FAST' を付けないと約30MB）。
 // build は画面（NoticeUi: 縮めて見せ、直接編集する）と PDF（縮めていない写しを画面の外で撮る）で同じものを使う。
@@ -114,9 +114,8 @@
     return { scale, overflow: inner.scrollHeight > avail + 1 };
   }
 
-  // PDF（Blob）。opts: { notice（notices の行）, org, onStep(段階), onPages(画像の dataURL の配列) }（onPages はプレビューの画像に使う）
-  async function toBlob(opts) {
-    opts = opts || {};
+  // 紙面を画面の外で撮って PDF（Blob）にする（工事掲示・日報）。make() = 紙面（.sheet）を作る、onFit(fit の結果) で止めるときは throw
+  async function sheetBlob(make, opts, onFit) {
     if (typeof window.html2canvas !== 'function' || !window.jspdf || !window.jspdf.jsPDF) {
       throw new Error('PDFライブラリを読み込めませんでした。通信状況を確認して再読み込みしてください');
     }
@@ -127,10 +126,11 @@
     Object.assign(host.style, { position: 'absolute', left: '-10000px', top: '0', width: '210mm', zIndex: '-1', pointerEvents: 'none' });
     document.body.appendChild(host);
     try {
-      const { sheet } = build((opts.notice && opts.notice.data) || {}, opts.org);
+      const sheet = make();
       host.appendChild(sheet);
       await step('文字の準備', window.ReportPdf.fontsReady());
-      fit(sheet);
+      const r = fit(sheet);
+      if (onFit) onFit(r);
       const canvas = await step('描画', window.html2canvas(sheet, { scale: 3, backgroundColor: '#ffffff', logging: false, useCORS: false, scrollX: 0, scrollY: 0 }));
       const png = canvas.toDataURL('image/png');
       canvas.width = canvas.height = 0;
@@ -145,6 +145,8 @@
       host.remove();
     }
   }
+  // PDF（Blob）。opts: { notice（notices の行）, org, onStep(段階), onPages(画像の dataURL の配列) }（onPages はプレビューの画像に使う）
+  const toBlob = opts => { opts = opts || {}; return sheetBlob(() => build((opts.notice && opts.notice.data) || {}, opts.org).sheet, opts); };
 
-  window.NoticePdf = { build, fit, toBlob };
+  window.NoticePdf = { build, fit, toBlob, sheetBlob };
 })();

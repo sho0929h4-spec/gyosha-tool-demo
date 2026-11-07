@@ -1,4 +1,5 @@
-// js/report-pdf.js — 報告書の A4 表紙＋写真ページを描画し、PDF（Blob）にする。window.ReportPdf = { toBlob, step, fontsReady }
+// js/report-pdf.js — 報告書の A4 表紙＋写真ページを描画し、PDF（Blob）にする。window.ReportPdf = { toBlob, buildPages, injectCss, applyMarks, step, fontsReady }
+// buildPages は紙面の上で直す画面（report-sheet-ui）でも使う。forScreen=true のときだけ押せる所に data-field / data-photo の印を付ける（見た目は同じ）
 // 様式（寸法・文言・色）は report-tool（claude code/report-tool/index.html 993-1099行の buildReportContent / buildPhotoPage と .rp-* CSS）から写した。
 // 作り方は簡易版（業者ツール（簡易版）/js/report-pdf.js）を写した: createElement + textContent（innerHTML を使わない）・1ページずつ html2canvas → jsPDF・
 //   進みの表示（opts.onStep(段階)）と段階ごとの30秒の見切り（step）・長い表紙は行の境目で次のページへ（slicesOf）・写真の印は重ねた画像に差し替え（applyMarks）。
@@ -67,6 +68,7 @@
 .rp-imgfail{position:absolute;inset:3mm;border:1px dashed #c8d6e5;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:9pt;text-align:center;}
 .rp-pfoot{flex-shrink:0;margin-top:auto;padding-top:3mm;border-top:1px solid #e2e8f0;font-size:8pt;color:#94a3b8;display:flex;justify-content:space-between;gap:4mm;}
 .rp-capture .rp-page{box-shadow:none;}
+.rp-page .sel{outline:1.5pt solid #7aa7e8;outline-offset:-1pt;background:rgba(30,91,184,.08);}
 `;
   function injectCss() {
     if (document.getElementById('rp-style')) return;
@@ -103,7 +105,7 @@
 
   /* ===== 表紙（元 buildReportContent） ===== */
   function buildCover(o) {
-    const { report, org, logoUrl, company } = o;
+    const { report, org, logoUrl, company, forScreen } = o;
     const mode = RL().modeOf(report.work_type);
     const cfg = RL().MODES[mode];
     const d = report.data || {};
@@ -152,6 +154,7 @@
     if (cfg.checkCardTitle) {
       page.appendChild(el('div', 'rp-sec', cfg.checkCardTitle));
       const items = el('div', 'rp-items');
+      if (forScreen) items.dataset.field = 'items';
       const chips = RL().checkedItems(d, mode);
       if (chips.length) chips.forEach(c => items.appendChild(el('span', 'rp-badge', '✓ ' + c)));
       else items.appendChild(el('span', 'rp-nodata', '記録なし'));
@@ -166,12 +169,14 @@
     if (rr.length) {
       rr.forEach(r => {
         const tr = el('tr');
+        if (forScreen) tr.dataset.field = cfg.rRows.find(x => x.label === r.label).field;
         tr.appendChild(el('td', 'rp-rc-lbl' + (r.next ? ' rp-rc-next-lbl' : ''), r.label));
         tr.appendChild(el('td', r.next ? 'rp-rc-next-cell' : '', r.value));
         rb.appendChild(tr);
       });
     } else {
       const tr = el('tr');
+      if (forScreen) tr.dataset.field = 'f1';
       const td = el('td', 'rp-rc-none', '記録なし');
       td.colSpan = 2;
       tr.appendChild(td);
@@ -186,6 +191,7 @@
     if (cl.length || keyReturn) {
       page.appendChild(el('div', 'rp-sec', 'チェックリスト'));
       const box = el('div', 'rp-cl');
+      if (forScreen) box.dataset.field = 'checklist';
       if (cl.length) cl.forEach(i => box.appendChild(el('div', 'rp-cl-item', '✓ ' + i)));
       else box.appendChild(el('span', 'rp-nodata', '記録なし'));
       if (keyReturn) box.appendChild(el('div', 'rp-cl-item rp-cl-key', '鍵の返却方法：' + keyReturn));
@@ -200,7 +206,7 @@
 
   /* ===== 写真ページ（元 buildPhotoPage。4枚/ページ・全体表示） ===== */
   const PER_PAGE = 4;
-  function buildPhotoPage(chunk, startIdx, company) {
+  function buildPhotoPage(chunk, startIdx, company, forScreen) {
     const page = el('div', 'rp-page rp-photo-page');
     const head = el('div', 'rp-pp-head');
     head.appendChild(el('span', 'rp-pp-co', company));
@@ -214,6 +220,7 @@
       if (!ph) { grid.appendChild(el('div', 'rp-pcell rp-pcell-empty')); continue; }
       const num = startIdx + j + 1;
       const cell = el('div', 'rp-pcell');
+      if (forScreen) cell.dataset.photo = String(startIdx + j);
       const ch = el('div', 'rp-chead');
       ch.appendChild(el('span', 'rp-cnum', 'No.' + num));
       if (RL().PHASE_COLORS[ph.phase]) {
@@ -240,6 +247,18 @@
     foot.appendChild(el('span', '', company));
     page.appendChild(foot);
     return page;
+  }
+
+  // 表紙1枚（分割しない）＋写真ページ。opts = { report, org, logoUrl, photoUrls, createdDate, forScreen }
+  function buildPages(opts) {
+    const report = opts.report || {};
+    const org = opts.org || {};
+    const company = org.show_company_on_report !== false ? trim(org.name) : '';
+    const urls = Array.isArray(opts.photoUrls) ? opts.photoUrls : [];
+    const photos = (Array.isArray(report.photos) ? report.photos : []).map((p, i) => Object.assign({}, p || {}, { url: urls[i] || '' }));
+    const pages = [buildCover({ report, org, logoUrl: opts.logoUrl, company, createdDate: opts.createdDate, forScreen: !!opts.forScreen })];
+    for (let k = 0; k * PER_PAGE < photos.length; k++) pages.push(buildPhotoPage(photos.slice(k * PER_PAGE, (k + 1) * PER_PAGE), k * PER_PAGE, company, !!opts.forScreen));
+    return pages;
   }
 
   /* ===== 写真の印（Task 14） ===== */
@@ -396,11 +415,6 @@
       throw new Error('PDFライブラリを読み込めませんでした。通信状況を確認して再読み込みしてください');
     }
     injectCss();
-    const report = opts.report || {};
-    const org = opts.org || {};
-    const company = org.show_company_on_report !== false ? trim(org.name) : '';
-    const urls = Array.isArray(opts.photoUrls) ? opts.photoUrls : [];
-    const photos = (Array.isArray(report.photos) ? report.photos : []).map((p, i) => Object.assign({}, p || {}, { url: urls[i] || '' }));
     const host = document.createElement('div');
     host.className = 'rp-capture';
     host.setAttribute('aria-hidden', 'true');
@@ -438,15 +452,14 @@
       fitCaptions(host);
     };
     try {
-      const cover = buildCover({ report, org, logoUrl: opts.logoUrl, company, createdDate: opts.createdDate });
+      const [cover, ...photoPages] = buildPages(Object.assign({}, opts, { forScreen: false }));
       host.replaceChildren(cover);
       await ready(1);
       const coverSlices = slicesOf(cover);
       await step(opts, '1ページ目の描画', capture(cover, coverSlices));
       host.replaceChildren();
-      const nPhotoPages = Math.ceil(photos.length / PER_PAGE);
-      for (let k = 0; k < nPhotoPages; k++) {
-        const page = buildPhotoPage(photos.slice(k * PER_PAGE, (k + 1) * PER_PAGE), k * PER_PAGE, company);
+      for (let k = 0; k < photoPages.length; k++) {
+        const page = photoPages[k];
         host.replaceChildren(page);
         const no = coverSlices.length + k + 1;
         await ready(no);
@@ -477,5 +490,5 @@
     throw new Error('写真が多すぎてPDFが大きすぎます（20MBまで）。写真を減らしてください');
   }
 
-  window.ReportPdf = { toBlob, step, fontsReady }; // step・fontsReady は見積書（estimate-pdf.js）でも使う
+  window.ReportPdf = { toBlob, buildPages, injectCss, applyMarks, step, fontsReady }; // step・fontsReady は見積書（estimate-pdf.js）でも使う
 })();

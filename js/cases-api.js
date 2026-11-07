@@ -1,7 +1,7 @@
 // js/cases-api.js — 案件・元請（clients）・案件ごとの書類の数の読み書き（sb = 本物の Supabase か偽物）
 const CasesApi = (() => {
   const ok = r => { if (r.error) throw r.error; return r.data; };
-  const COLS = ['name', 'room', 'address', 'client_id', 'client_name', 'client_contact', 'client_email', 'memo'];
+  const COLS = ['name', 'room', 'address', 'client_id', 'client_name', 'client_contact', 'client_email', 'memo', 'survey_at', 'work_start', 'work_end'];
   const pick = row => Object.fromEntries(COLS.filter(k => k in row).map(k => [k, row[k]]));
   return {
     list: async () => ok(await sb.from('cases').select('*').is('archived_at', null).order('created_at', { ascending: false })),
