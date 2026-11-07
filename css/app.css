@@ -209,3 +209,19 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .dw-poly .btn { flex: none; }
 .dw-legend { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
 .dw-li { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; min-width: 0; }
+/* 見積書を紙面の上で直す（estimate-sheet-ui） */
+.es-sheet-bar { display: flex; flex-direction: column; gap: 6px; }
+.es-sheet-bar .seg { align-self: flex-start; }
+.es-sheet-bar .seg button { flex: none; min-width: 72px; font-size: 14px; }
+.es-stage { overflow: hidden; background: #e8e8e8; border: 1px solid #ccc; border-radius: 8px; touch-action: pan-y; }
+.es-pz { position: relative; overflow: visible; }
+.es-scale { width: 595.28pt; transform-origin: 0 0; display: flex; flex-direction: column; gap: 12px; user-select: none; -webkit-user-select: none; cursor: pointer; }
+.es-scale .pd-page { flex: none; }
+.es-sheet-panel { position: fixed; left: 0; right: 0; bottom: 0; max-width: 640px; margin: 0 auto; z-index: 60; background: #fff; border-top: 1px solid #bbb; box-shadow: 0 -4px 16px rgba(0,0,0,.12);
+  padding: 4px 16px calc(12px + env(safe-area-inset-bottom, 0px)); max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.es-sp-hd { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.es-sp-b { display: flex; flex-direction: column; gap: 10px; }
+.es-sp-amt { min-height: 48px; display: flex; align-items: center; justify-content: flex-end; padding: 0 6px; overflow-wrap: anywhere; background: #f4f4f4; border-radius: 8px; font-size: 16px; }
+.es-sp-nums { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.es-sp-nums input { padding: 0 8px; }
+.es-scale .pd-hanko { object-fit: contain; } /* 画面だけ。PDF は waitImages で縦横の比を合わせる */

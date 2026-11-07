@@ -30,6 +30,20 @@
     r.amount = round(num(r.unit_price) * num(q));
     return r;
   }
+  // 紙面の上で1つの欄を直す（key = description|detail|quantity|unit|unit_price）。行は1つに原価と販売を持つので、文字はそのまま原価側にも効く（移植メモ §1.2）
+  //   quantity は setQuantity と同じ。unit_price は手で直した扱い（manual）で 金額＝単価×数量（原価は触らない）。最後に諸経費の自動行を出し直す
+  function setCell(rows, i, key, value, pct) {
+    const out = rows.slice();
+    const r = Object.assign({}, out[i]);
+    if (key === 'quantity') out[i] = setQuantity(r, num(value), pct);
+    else if (key === 'unit_price') { const up = round(num(value)); out[i] = Object.assign(r, { unit_price: up, amount: round(up * num(r.quantity)), manual: true }); }
+    else if (['description', 'detail', 'unit'].includes(key)) out[i] = Object.assign(r, { [key]: String(value == null ? '' : value) });
+    else throw new Error('直せない欄: ' + key);
+    return recalcShokehi(out);
+  }
+  // 行を消す（0行になったら空の行を1つ）・この下に空の行を足す
+  const removeLine = (rows, i) => { const out = rows.filter((_, j) => j !== i); return recalcShokehi(out.length ? out : [emptyRow()]); };
+  const insertLineAfter = (rows, i) => rows.slice(0, i + 1).concat([emptyRow()], rows.slice(i + 1));
   // 諸経費の自動行: 自分・ほかの自動行・postTax を除いた販売額の合計 × pct/100。原価にも同じ額（粗利に効かない）
   function recalcShokehi(rows) {
     return rows.map((r, i) => {
@@ -314,7 +328,7 @@
   }
   const companyOf = (g, me) => ({ name: str(g.name), registration_number: str(g.registration_number), address: str(g.address), tel: str(g.tel), manager: str(me && me.display_name) });
 
-  const api = { emptyRow, costRow, unitPriceOf, fixRow, setQuantity, recalcShokehi, applyProfit, quickAdd, totals, roundTo100, isRealItem, gross, FIXED_NOTE, notesText,
+  const api = { emptyRow, costRow, unitPriceOf, fixRow, setQuantity, setCell, removeLine, insertLineAfter, recalcShokehi, applyProfit, quickAdd, totals, roundTo100, isRealItem, gross, FIXED_NOTE, notesText,
     TEMPLATES, templateTotal, applyTemplate, templateLines, Z2H, normKey, normUnit, sameUnit, normProp, roomNo, sameProperty, buildingName, sameBuilding, isMoveCost, newest,
     suggestDescriptions, check, suggestPrices, isRateTrackable, rateView, rateRows, rateSummary, wideSpread, formatNumber, ymd, defaultDue, newData, companyOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

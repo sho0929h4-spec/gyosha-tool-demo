@@ -1,4 +1,4 @@
-// js/estimate-pdf.js — 見積書の紙面（A4・pt）を組み、PDF（Blob）にする。window.EstimatePdf = { toBlob, build, pagesOf, sealSplit, sealSvg, fileName }
+// js/estimate-pdf.js — 見積書の紙面（A4・pt）を組み、PDF（Blob）にする。window.EstimatePdf = { toBlob, build, shrink, pagesOf, sealSplit, sealSvg, fileName }
 // 寸法・文言・縮め方は移植メモ §1.9・§1.10（freee-quote-builder の invoice.html 395-515行の .pd-* と renderPaper・shrinkOverflow・hankoSvg）をそのまま写した。
 // 作り方は report-pdf.js と同じ: createElement + textContent（innerHTML を使わない）・画面の外に縮めていない写しを置いて1ページずつ html2canvas → jsPDF・
 //   進みの表示（opts.onStep）と段階ごとの30秒の見切り（ReportPdf.step）。罫線と社印は SVG を画像（data URL）にして置く。
@@ -13,9 +13,9 @@
 
   /* ---------- ページの分け方（INV:1979-1983） ---------- */
   const ROWS_P1 = 17, ROWS_CONT = 31;
-  // 実データのある行だけを、1ページ目17行・2ページ目から31行ずつに分ける。行が0でも1ページ
-  function pagesOf(lines) {
-    const items = (lines || []).filter(EL.isRealItem);
+  // 実データのある行だけを、1ページ目17行・2ページ目から31行ずつに分ける。行が0でも1ページ。keep は空でも出す行の番号（紙面の上で選んだ行）
+  function pagesOf(lines, keep) {
+    const items = (lines || []).filter((r, i) => EL.isRealItem(r) || i === keep);
     const out = [items.slice(0, ROWS_P1)];
     for (let i = ROWS_P1; i < items.length; i += ROWS_CONT) out.push(items.slice(i, i + ROWS_CONT));
     return out;
@@ -106,6 +106,8 @@
 .pd-pageno{left:0;right:0;top:812pt;text-align:center;}
 .pd-run-l{left:42.5pt;top:42.5pt;width:290pt;white-space:nowrap;overflow:hidden;}
 .pd-run-r{left:342.5pt;top:42.5pt;width:210.2pt;text-align:right;white-space:nowrap;}
+.pd-page .sel{outline:1.5pt solid #7aa7e8;outline-offset:-1pt;background:rgba(30,91,184,.08);}
+.capturing [data-line],.capturing [data-field]{outline:none;background:transparent;}
 `;
   function injectCss() {
     if (document.getElementById('pd-style')) return;
@@ -178,16 +180,27 @@
     return [d, el('td', 'c-qty', zero ? '' : String(r.quantity == null ? '' : r.quantity) + ' ' + str(r.unit)),
       el('td', 'c-price', zero ? '' : fmt(EL.unitPriceOf(r))), el('td', 'c-amt', zero ? '' : fmt(r.amount))];
   }
-  function itemsTable(rows, cap, cont) {
+  // lineNo(r) は画面用（forScreen）のときだけ: 行の番号を data-line に（空いている行は new）、各セルに data-cell
+  const CELLS = ['description', 'quantity', 'unit_price', 'amount'];
+  function itemsTable(rows, cap, cont, lineNo) {
     const body = [];
     for (let k = 0; k < cap; k++) body.push({ cells: itemCells(rows[k]) });
-    return table('pd-items' + (cont ? ' cont' : ''), [294, 61.5, 68, 86.7], ['摘要', '数量', '単価', '明細金額'], body);
+    const t = table('pd-items' + (cont ? ' cont' : ''), [294, 61.5, 68, 86.7], ['摘要', '数量', '単価', '明細金額'], body);
+    if (lineNo) t.querySelectorAll('tbody tr').forEach((tr, k) => {
+      tr.dataset.line = rows[k] ? lineNo(rows[k]) : 'new';
+      tr.querySelectorAll('td').forEach((td, j) => { td.dataset.cell = CELLS[j]; });
+    });
+    return t;
   }
 
-  // 紙面（.pd-page の配列。画面に置く前の DOM）。o: { estimate: estimates の行, org, sealUrl }
+  // 紙面（.pd-page の配列。画面に置く前の DOM）。o: { estimate: estimates の行, org, sealUrl, forScreen, keep }
+  //   forScreen: 紙面の上で直す画面（EstimateSheetUi）用に data-line・data-cell・data-field の印を付ける（見た目は変えない）。keep は空でも出す行の番号
   function build(o) {
+    injectCss();
     const est = o.estimate || {}, d = est.data || {}, c = d.company || {};
-    const chunks = pagesOf(d.lines);
+    const lines = d.lines || [];
+    const chunks = pagesOf(lines, o.forScreen ? o.keep : undefined);
+    const mark = (e, f) => { if (o.forScreen) e.dataset.field = f; return e; };
     const N = chunks.length;
     const rate = num(d.tax_rate);
     const t = EL.totals(d.lines || [], rate);
@@ -209,7 +222,7 @@
         page.appendChild(el('div', 'pd-title', '見積書'));
         const cl = el('div', 'pd-client');
         cl.append(el('span', null, str(d.client) || '　'), el('span', 'hon', str(d.honorific) || '御中'));
-        page.appendChild(cl);
+        page.appendChild(mark(cl, 'client'));
         page.appendChild(table('pd-meta', [96.35, 96.35], null,
           [['見積日', d.date], ['見積書番号', invNo], ['有効期限', d.due], ['登録番号', c.registration_number]].map(([k, v]) => ({ cells: [td(null, k), td('v', str(v))] }))));
         page.appendChild(el('div', 'pd-co-name', str(c.name)));
@@ -221,20 +234,20 @@
         else if (str(c.name)) page.appendChild(img('pd-hanko', seal));
         page.appendChild(el('div', 'pd-greeting', '下記の通りお見積り申し上げます。'));
         page.appendChild(el('div', 'pd-subject-l', '件名'));
-        page.appendChild(el('div', 'pd-subject-v', subject || '　'));
-        page.appendChild(table('pd-summary', [86, 73.5, 134.5], ['小計', '消費税', '見積金額'],
-          [{ cells: [td(null, fmt(t.subtotal) + '円'), td(null, fmt(t.tax) + '円'), td('total', fmt(t.total) + '円')] }]));
+        page.appendChild(mark(el('div', 'pd-subject-v', subject || '　'), 'subject'));
+        page.appendChild(mark(table('pd-summary', [86, 73.5, 134.5], ['小計', '消費税', '見積金額'],
+          [{ cells: [td(null, fmt(t.subtotal) + '円'), td(null, fmt(t.tax) + '円'), td('total', fmt(t.total) + '円')] }]), 'totals'));
       } else {
         page.appendChild(el('div', 'pd-run-l', '件名　' + subject));
         page.appendChild(el('div', 'pd-run-r', '見積書番号　' + invNo));
       }
-      page.appendChild(itemsTable(rows, first ? ROWS_P1 : ROWS_CONT, !first));
+      page.appendChild(itemsTable(rows, first ? ROWS_P1 : ROWS_CONT, !first, o.forScreen ? r => String(lines.indexOf(r)) : null));
       if (last) {
         page.appendChild(table('pd-bd', [34.5, 100, 81.7], null, [
           { cls: 'r1', cells: [td(null, '内訳'), td(null, pct + '対象(税抜)'), td('num', fmt(t.subtotal) + '円')] },
           { cls: 'r2', cells: [td(null, ''), td(null, pct + '消費税'), td('num', fmt(t.tax) + '円')] }]));
         const nt = el('div', 'pd-notes');
-        nt.append(el('div', null, '備考'), el('div', 'pd-notes-b', EL.notesText(d)));
+        nt.append(el('div', null, '備考'), mark(el('div', 'pd-notes-b', EL.notesText(d)), 'notes_extra'));
         page.appendChild(nt);
       }
       page.appendChild(el('div', 'pd-pageno', (i + 1) + ' / ' + N));
@@ -297,6 +310,7 @@
     injectCss();
     const host = document.createElement('div');
     host.setAttribute('aria-hidden', 'true');
+    host.className = 'capturing';
     Object.assign(host.style, { position: 'absolute', left: '-10000px', top: '0', width: PAGE_W + 'pt', zIndex: '-1', pointerEvents: 'none' });
     document.body.appendChild(host);
     const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
@@ -327,5 +341,5 @@
     }
   }
 
-  root.EstimatePdf = Object.assign(api, { build, toBlob });
+  root.EstimatePdf = Object.assign(api, { build, shrink, toBlob });
 })(typeof window !== 'undefined' ? window : globalThis);
