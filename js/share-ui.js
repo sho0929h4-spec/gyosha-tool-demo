@@ -31,7 +31,7 @@ const ShareUi = (() => {
     if (prev) prev.remove();
     const fname = o.fileName || ShareLogic.fileName(o.docLabel, o.caseRow);
     const m0 = ctx.membership || {};
-    const m1 = ShareLogic.message({ docLabel: o.docLabel, caseRow: o.caseRow, org: ctx.org || {}, me: { name: m0.display_name, tel: m0.phone }, short: line });
+    const m1 = ShareLogic.message({ type: o.type, docLabel: o.docLabel, caseRow: o.caseRow, org: ctx.org || {}, me: { name: m0.display_name, tel: m0.phone }, short: line });
     const st = { file: new File([o.blob], fname, { type: 'application/pdf' }), url: '', pdfPath: null, sent: '', busy: false };
 
     const bg = mk('div', 'modal-bg');

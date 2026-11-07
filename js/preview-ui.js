@@ -123,8 +123,16 @@ const PreviewUi = (() => {
       catch (e) { toast('発行済みにできませんでした: ' + errText(e)); }
       if (st !== s) return;
       editBtns();
-      // 発行済みになった: 紙面を外して、今作った PDF の画像に替える
+      // 発行済みになった: 紙面で直した分も単価マスタに登録し（同じ source の記録は入れ替わる）、紙面を外して今作った PDF の画像に替える
       if (s.sheet && s.row.status !== 'draft') {
+        if (s.row.number) {
+          try {
+            const d = EstimateSheetUi.data(), existing = await EstimatesApi.rates();
+            const o = { client: String(d.client || ''), vendor: d.vendor || '', property: CaseLogic.placeName(s.caseRow) || String(d.subject || ''), source: s.row.number };
+            for (const kind of ['sell', 'cost']) await EstimatesApi.registerRates(EstimateLogic.rateView(d.lines, kind), Object.assign({ kind }, o), existing);
+          } catch (e) { toast('単価マスタに登録できませんでした: ' + errText(e)); }
+          if (st !== s) return;
+        }
         EstimateSheetUi.unmount();
         s.sheet = false;
         cache.clear();

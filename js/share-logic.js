@@ -20,10 +20,11 @@
     const co = str(c && c.client_name), ct = str(c && c.client_contact);
     return [co, ct ? (/(様|御中|さん)$/.test(ct) ? ct : ct + '様') : 'ご担当者様'].filter(Boolean).join(' ');
   }
-  // o: { docLabel, caseRow, org: { name, tel }, me: { name, tel }, short } → { subject, body }
-  // 見積書は番号と版を付けた名前（「見積書 EST-… 第N版」）でも、件名と用件では「見積書」とだけ書く
+  // o: { type, docLabel, caseRow, org: { name, tel }, me: { name, tel }, short } → { subject, body }
+  // 見積書は番号と版を付けた名前（「見積書 EST-… 第N版」）でも、件名と用件では「見積書」とだけ書く。type があればそれで決める（報告書の題が「図面…」でも誤らない）
+  const TYPE_DOC = { estimate: '見積書', notice: '工事掲示', drawing: '図面' };
   function message(o) {
-    const doc = (str(o.docLabel).match(/^(見積書|工事掲示|図面)/) || [str(o.docLabel)])[0];
+    const doc = o.type ? (TYPE_DOC[o.type] || str(o.docLabel)) : (str(o.docLabel).match(/^(見積書|工事掲示|図面)/) || [str(o.docLabel)])[0];
     const subject = [CL().placeName(o.caseRow || {}), doc].filter(Boolean).join(' ');
     const orgName = str(o.org && o.org.name), myName = str(o.me && o.me.name);
     const tel = str(o.me && o.me.tel) || str(o.org && o.org.tel);

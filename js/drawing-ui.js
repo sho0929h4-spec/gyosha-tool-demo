@@ -79,7 +79,7 @@ const DrawingUi = (() => {
   /* ---------- 取り込み ---------- */
   async function pdfToJpeg(file) {
     const lib = await loadPdfJs();
-    const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), cMapUrl: window.PDFJS_CMAPS, cMapPacked: true }).promise;
+    const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), cMapUrl: window.PDFJS_CMAPS, cMapPacked: true, isEvalSupported: false }).promise;
     try {
       const page = await doc.getPage(1);
       const vp1 = page.getViewport({ scale: 1 });

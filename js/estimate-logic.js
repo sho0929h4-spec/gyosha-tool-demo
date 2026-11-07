@@ -288,7 +288,7 @@
       if (!up || up < 0 || up > 1e9 || desc.includes('値引') || desc.includes('端数調整')) return;
       const key = normKey(desc).slice(0, 200);
       if (!key) return;
-      const r = { kind, client, vendor, property, description: desc, key, unit: str(it.unit).slice(0, 20), quantity: round(qty * 100) / 100, unit_price: up, source };
+      const r = { kind, client, vendor, property, description: desc, key, unit: str(it.unit).slice(0, 20), quantity: round(qty * 100) / 100, unit_price: up, source, date: ymd(new Date()) }; // date は端末の日付（DB の既定 current_date は UTC で前日になることがある）
       if (seen.has(sig(r))) return;
       seen.add(sig(r));
       rows.push(r);

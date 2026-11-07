@@ -550,7 +550,8 @@
     const ext = extOf(file.name), buf = await file.arrayBuffer();
     if (ext === 'pdf') {
       const pdfjs = await root.loadPdfJs();
-      const doc = await pdfjs.getDocument({ data: new Uint8Array(buf), cMapUrl: root.PDFJS_CMAPS, cMapPacked: true }).promise;
+      // isEvalSupported:false = フォントの中のスクリプトを動かさない（他社の PDF を読むため）
+      const doc = await pdfjs.getDocument({ data: new Uint8Array(buf), cMapUrl: root.PDFJS_CMAPS, cMapPacked: true, isEvalSupported: false }).promise;
       try {
         const pages = [];
         for (let i = 1; i <= doc.numPages; i++) {
