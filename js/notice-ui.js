@@ -161,23 +161,6 @@ const NoticeUi = (() => {
     wc.appendChild(field('その他のお知らせ', input('nt-othernotice', 'textarea', 'otherNotice', { rows: 4, maxLength: 1000 }), { hint: '1行ずつ本文の第1段落の終わりに入ります' }));
     body.appendChild(wc);
 
-    // 強調
-    const ec = card('強調（色・太字・場所）', 'nt-emph');
-    const col = document.createElement('input');
-    col.type = 'color';
-    col.id = 'nt-ecolor';
-    col.value = NL.normalizeColor(d.emphasisColor);
-    const code = mk('span', 'hint', col.value);
-    col.addEventListener('input', () => { d.emphasisColor = NL.normalizeColor(col.value); code.textContent = d.emphasisColor; upd(); });
-    const cr = mk('div', 'nt-color');
-    cr.append(col, code);
-    ec.appendChild(field('強調の色', col, { wrap: cr }));
-    ec.appendChild(check('nt-ebold', '太字にする', () => d.emphasisBold, v => { d.emphasisBold = v; }));
-    ec.appendChild(mk('div', 'grp-t', '強調する場所'));
-    d.emphasis = d.emphasis || {};
-    NL.EMPHASIS_TARGETS.forEach(t => ec.appendChild(check('nt-em-' + t.key, t.label, () => d.emphasis[t.key], v => { d.emphasis[t.key] = v; })));
-    body.appendChild(ec);
-
     // お問い合わせ先
     const cc = card('お問い合わせ先（会社の設定から。書き換え可）', 'nt-contact');
     cc.append(field('会社名', input('nt-cc', 'text', 'contactCompany', { maxLength: 100 })),

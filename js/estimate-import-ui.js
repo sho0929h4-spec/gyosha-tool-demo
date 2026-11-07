@@ -1,4 +1,4 @@
-// js/estimate-import-ui.js — 08 仕入見積の読み込み（#estimate/{id}/import）: PDF・Excel を選ぶ → 読み取った行を確かめて選ぶ → 販売単価の付け方 → 明細に入れる
+// js/estimate-import-ui.js — 08 仕入見積の読み込み（#estimate/{id}/import）: PDF・Excel・写真（撮る／選ぶ）を選ぶ → 読み取った行を確かめて選ぶ → 販売単価の付け方 → 明細に入れる
 // 読み取りは EstimateImport（移植メモ §1.8・§2・§3）。入れた行は原価（cost_*）として裏に残し、販売は applyProfit で作る。
 // 入れるとき: 原価の照合（登録の前。いま入れた値が自分の「過去」にならないように）→ 見積書を保存 → 単価マスタに原価として登録（source＝ファイル名）→ #estimate/{id}
 const EstimateImportUi = (() => {
@@ -15,25 +15,25 @@ const EstimateImportUi = (() => {
 
   async function read(f) {
     const ext = EI.extOf(f.name);
-    if (!ext) { setMsg('PDFまたはExcel(.xlsx/.xls)ファイルを選択してください。', 'err'); return; }
-    const kind = ext === 'pdf' ? 'PDF' : 'Excel';
+    if (!ext) { setMsg('PDF・Excel(.xlsx/.xls)・写真(jpg/png)のファイルを選択してください。', 'err'); return; }
+    const kind = ext === 'pdf' ? 'PDF' : EI.IMG.includes(ext) ? '写真' : 'Excel';
     const s = st;
     setMsg(kind + 'を読み取り中…');
-    $('im-pick').disabled = true;
+    $('im-pick').disabled = $('im-photo-btn').disabled = true;
     try {
-      const res = await EI.readFile(f);
+      const res = await EI.readFile(f, m => { if (st === s) setMsg(m); });
       if (st !== s) return;
       s.res = res;
       s.file = f.name;
       s.verifyOff = false;
       s.rows = EI.prepare(res.items).map(r => Object.assign(r, { on: num(r.amount) > 0 })); // 読めない行（金額 0）は出すが既定で外す
       if (!s.rows.length) setMsg('明細の自動抽出ができませんでした。手動で入力してください。' + (res.error ? '\n' + res.error : ''), 'err');
-      else setMsg('✓ ' + res.items.length + '件の明細を読み込みました（' + (EI.METHOD_LABEL[res.method] || res.method) + '）'
+      else setMsg('✓ ' + res.items.length + '件の明細を読み込みました（' + (res.photo ? '写真の文字認識。数字と文字を確かめてください' : EI.METHOD_LABEL[res.method] || res.method) + '）'
         + (res.subject ? '\n件名: ' + res.subject : '') + (res.pdf_total ? '\n原本最大金額: ¥' + yen(res.pdf_total) : '') + (res.notes ? '\n備考を取得' : ''), 'ok');
       render();
     } catch (e) {
       if (st === s) setMsg(kind + 'の読み込みに失敗しました: ' + errText(e), 'err');
-    } finally { $('im-pick').disabled = false; }
+    } finally { $('im-pick').disabled = $('im-photo-btn').disabled = false; }
   }
 
   function render() {
@@ -187,11 +187,13 @@ const EstimateImportUi = (() => {
     if (wired) return;
     wired = true;
     $('im-back').addEventListener('click', () => { if (st) location.hash = '#estimate/' + st.row.id; });
-    $('im-pick').addEventListener('click', () => $('im-file').click());
-    $('im-file').addEventListener('change', () => {
-      const f = $('im-file').files[0];
-      $('im-file').value = '';
-      if (f && st) read(f);
+    [['im-pick', 'im-file'], ['im-photo-btn', 'im-photo']].forEach(([btn, inp]) => {
+      $(btn).addEventListener('click', () => $(inp).click());
+      $(inp).addEventListener('change', () => {
+        const f = $(inp).files[0];
+        $(inp).value = '';
+        if (f && st) read(f);
+      });
     });
     $('im-put').addEventListener('click', () => put());
   }

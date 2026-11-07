@@ -18,18 +18,22 @@
     if (edited) node.setAttribute('data-edited', '1');
     return node;
   }
-  // 空の行で段落、改行で行。emph に入っている文と文字がまったく同じ行だけ強調する
-  function renderBody(node, text, emph) {
+  // 空の行で段落、改行で行
+  function renderBody(node, text) {
     node.textContent = '';
     String(text).split(/\n{2,}/).forEach(block => {
       const p = el('p');
-      block.split('\n').forEach(t => {
-        if (!t.trim()) return;
-        const s = el('span', 'body-line', t);
-        if (emph && emph.has(t.trim())) s.classList.add('emph');
-        p.appendChild(s);
-      });
+      block.split('\n').forEach(t => { if (t.trim()) p.appendChild(el('span', 'body-line', t)); });
       if (p.childNodes.length) node.appendChild(p);
+    });
+  }
+  // 題: 号室（「502号室」）の所だけ強調
+  function renderSubject(node, text, room) {
+    node.textContent = '';
+    const parts = room ? String(text).split(room) : [String(text)];
+    parts.forEach((t, i) => {
+      if (i) node.appendChild(el('span', 'emph', room));
+      if (t) node.appendChild(document.createTextNode(t));
     });
   }
   // 1行目が値、2行目からが ※注記
@@ -50,11 +54,8 @@
     const d = data || {};
     const c = NL().compose(d, org);
     const ov = d.overrides || {};
-    const em = d.emphasis || {};
     const sheet = el('div', 'sheet');
     const inner = el('div', 'sheet-inner');
-    inner.style.setProperty('--sheet-alert', NL().normalizeColor(d.emphasisColor));
-    inner.classList.toggle('emph-bold', d.emphasisBold !== false);
     sheet.appendChild(inner);
 
     const top = el('div', 'sheet-top');
@@ -64,11 +65,10 @@
     inner.append(top,
       slot(el('div', 'sheet-greeting'), 'greeting', c.greeting, ov),
       slot(el('div', 'sheet-opening'), 'opening', c.opening, ov));
-    const subj = slot(el('div', 'sheet-subject'), 'subject', c.subject, ov);
-    if (em.subject) subj.classList.add('emph');
-    const bodyEmph = em.body ? new Set(NL().noticeTexts(d)) : null;
+    const room = NL().normalizeRoom(d.roomNo);
+    const subj = slot(el('div', 'sheet-subject'), 'subject', c.subject, ov, (n, t) => renderSubject(n, t, room));
     inner.append(subj,
-      slot(el('div', 'sheet-body'), 'body', c.body.map(p => p.join('\n')).join('\n\n'), ov, (n, t) => renderBody(n, t, bodyEmph)),
+      slot(el('div', 'sheet-body'), 'body', c.body.map(p => p.join('\n')).join('\n\n'), ov, renderBody),
       slot(el('div', 'sheet-closing'), 'closing', c.closing, ov),
       slot(el('div', 'sheet-ki'), 'ki', c.ki, ov));
 
@@ -77,11 +77,11 @@
       const row = el('div', 'detail-row');
       const l = slot(el('div', 'detail-label'), 'detailLabel.' + r.key, r.label, ov);
       const v = slot(el('div', 'detail-value'), 'detail.' + r.key, [r.value].concat(r.notes).join('\n'), ov, renderDetail);
-      if (em[r.key]) { l.classList.add('emph'); v.classList.add('emph'); }
+      if (NL().EMPHASIS.includes(r.key)) { l.classList.add('emph'); v.classList.add('emph'); }
       row.append(l, v);
       det.appendChild(row);
     });
-    if (em.notes) det.querySelectorAll('.detail-note').forEach(n => n.classList.add('emph'));
+    det.querySelectorAll('.detail-note').forEach(n => n.classList.add('emph'));
     inner.appendChild(det);
 
     // お問い合わせ先: 会社名・住所・電話のどれかがあるときだけ

@@ -3,7 +3,7 @@
 /* ===== A4縦の掲示 ===== */
 .sheet { width: 210mm; height: 297mm; padding: 20mm; background: #fff; color: #000; overflow: hidden;
   border: 1px solid #ccc; box-shadow: 0 1px 6px rgba(0,0,0,.12); }
-.sheet-inner { --scale: 1; --sheet-alert: #c00000; height: 100%;
+.sheet-inner { --scale: 1; height: 100%;
   font-family: "Hiragino Mincho ProN", "Yu Mincho", "MS Mincho", serif;
   font-size: calc(11.5pt * var(--scale)); line-height: 1.75; color: #000; text-align: left; }
 .sheet-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1em; margin-bottom: 1.2em; }
@@ -26,8 +26,7 @@
 .detail-value { flex: 1 1 auto; }
 .detail-notes { margin-top: .15em; }
 .detail-note { display: block; padding-left: 1em; text-indent: -1em; } /* ※ をぶら下げる */
-.emph { color: var(--sheet-alert); }
-.emph-bold .emph { font-weight: 700; }
+.emph { color: #c00000; font-weight: 700; }
 .sheet-contact { margin-top: 1.4em; padding-top: .7em; border-top: 1px solid #000; }
 .contact-title { margin: 0 0 .35em; font-weight: 700; }
 .contact-line { display: block; white-space: pre-line; }

@@ -19,16 +19,8 @@
       extra: { key: 'otherWorkText', label: 'その他の工事内容', placeholder: '例：高圧洗浄機を使用いたします' } }
   ];
   const NOISE_VIBRATION_TEXT = '作業中は騒音・振動が発生いたします。';
-  const DEFAULT_COLOR = '#c00000';
-  // 強調できる場所（drain・date・time は記書きの行のキーと同じ名前）
-  const EMPHASIS_TARGETS = [
-    { key: 'notes', label: '記書きの※注記', on: true },
-    { key: 'drain', label: '【排水制限】の行', on: true },
-    { key: 'body', label: '本文の注意文', on: false },
-    { key: 'subject', label: '題（「502号室　◯◯工事のお知らせ」）', on: false },
-    { key: 'date', label: '【工事日】の行', on: false },
-    { key: 'time', label: '【作業時間】の行', on: false }
-  ];
+  // 赤・太字で強調する所（固定。欄は無い）: 題の号室、記書きの【排水制限】【工事日】【作業時間】の行と ※注記
+  const EMPHASIS = ['drain', 'date', 'time'];
   const REQUIRED = [['propertyName', '物件名'], ['roomNo', '号室'], ['workName', '工事名称']];
   // プレビューで直したとき、入力欄へ書き戻すキー（ほかは overrides に入れる）
   const WRITE_BACK = ['addressee', 'contactCompany', 'contactAddress', 'contactTel'];
@@ -98,7 +90,6 @@
   }
   // 記書きの注記: 頭に「※」、最後の「。」を取る
   const toNotes = texts => texts.map(t => '※' + t.replace(/。$/, ''));
-  const normalizeColor = v => { const s = str(v).toLowerCase(); return /^#[0-9a-f]{6}$/.test(s) ? s : DEFAULT_COLOR; };
   const autoAddressee = d => (str(d && d.propertyName) || '（物件名）') + 'に居住中の皆様へ';
   const addresseeOf = d => (d && d.addresseeEdited && str(d.addressee)) || autoAddressee(d);
   // 連絡先は data の値（会社の設定から入れたもの）。まだ入れていない古い data だけ会社の設定を使う
@@ -133,16 +124,14 @@
   function newData(caseRow, today, org) {
     const t = today || new Date();
     const c = caseRow || {}, o = org || {};
-    const workTypes = {}, emphasis = {};
+    const workTypes = {};
     WORK_TYPES.forEach(w => { workTypes[w.key] = false; });
-    EMPHASIS_TARGETS.forEach(e => { emphasis[e.key] = e.on; });
     return {
       propertyName: str(c.name), addressee: '', addresseeEdited: false,
       noticeYear: String(t.getFullYear()), noticeMonth: String(t.getMonth() + 1), noticeDay: '', noticeKichijitsu: true,
       workDate: '', workDateEnd: '', workDateTbd: false, timeStart: '', timeEnd: '', timePlanned: true,
       roomNo: str(c.room), workName: '復旧工事', workTypes, drainRooms: '', otherWorkText: '', otherNotice: '',
-      contactCompany: str(o.name), contactAddress: str(o.address), contactTel: str(o.tel),
-      emphasisColor: DEFAULT_COLOR, emphasisBold: true, emphasis, overrides: {}
+      contactCompany: str(o.name), contactAddress: str(o.address), contactTel: str(o.tel), overrides: {}
     };
   }
   // 必須（PDF を作るときだけ）: { missing: [キー], text }
@@ -170,8 +159,8 @@
   // 書類の名前（案件画面・プレビュー・共有）: 「工事掲示 302号室」
   const docLabel = d => ['工事掲示', normalizeRoom(d && d.roomNo)].filter(Boolean).join(' ');
 
-  const api = { WORK_TYPES, NOISE_VIBRATION_TEXT, DEFAULT_COLOR, EMPHASIS_TARGETS, REQUIRED, WRITE_BACK,
-    normalizeRoom, normalizeRooms, asSentence, formatTime, noticeDate, workDate, workTime, noticeTexts, toNotes, normalizeColor,
+  const api = { WORK_TYPES, NOISE_VIBRATION_TEXT, EMPHASIS, REQUIRED, WRITE_BACK,
+    normalizeRoom, normalizeRooms, asSentence, formatTime, noticeDate, workDate, workTime, noticeTexts, toNotes,
     autoAddressee, compose, newData, validate, pruneOverrides, isMultiline, readSlot, fileName, docLabel, slotName };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.NoticeLogic = api;

@@ -1,7 +1,7 @@
-// js/estimate-import.js — 仕入見積（PDF・Excel）を明細の形にする（UMD: ブラウザは window.EstimateImport / node は module.exports。tests/estimate-import.test.js）。DOM に触らない
+// js/estimate-import.js — 仕入見積（PDF・Excel・写真）を明細の形にする（UMD: ブラウザは window.EstimateImport / node は module.exports。tests/estimate-import.test.js）。DOM に触らない
 // 出典は docs/notes/2026-11-06-port-notes.md §1.8・§2・§3（freee-quote-builder の pdf_parser.py・excel_parser.py・invoice.html）。定数・正規表現・手順・文言はそのまま
 // 結果: { items, subject, pdf_total, pdf_total_ex, notes, method, error?, image_pdf? }。method: pdfplumber（テーブル解析）／pdfplumber_layout（レイアウト解析）／regex（テキスト解析）／excel（Excel解析）／none
-// pdf.js（loadPdfJs）と SheetJS（loadXlsx）は readFile の中でだけ使う。ほかは配列と文字の固まりだけを受け取る
+// pdf.js（loadPdfJs）・SheetJS（loadXlsx）・Tesseract（loadTesseract。写真の文字認識）は readFile の中でだけ使う。ほかは配列と文字の固まりだけを受け取る
 (function (root) {
   'use strict';
   /* ---------- 共通の部品（§2.0） ---------- */
@@ -544,10 +544,59 @@
   const gapRow = gap => ({ description: '読取差額', detail: 'PDFの本体額に合わせるための調整行', quantity: 1, unit: '式', unit_price: gap, amount: gap });
   const METHOD_LABEL = { pdfplumber: 'テーブル解析', pdfplumber_layout: 'レイアウト解析', regex: 'テキスト解析', excel: 'Excel解析' };
 
+  /* ---------- 写真の文字認識（Tesseract）の語を pdf.js の item の形にして、PDF と同じ読み方に渡す ---------- */
+  // words: [{text, bbox:{x0,y0,x1,y1}}]（画素。左上が原点）。語の高さの中央値が 9pt になるように縮めて、行・セルの間隔の決まり（3・5・10pt）をそのまま使う
+  // 文字認識は 3桁区切りの , を . と読みがち（1.200 → 1,200）。小数の単価は無い前提
+  const fixNum = s => (/^[¥￥]?\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, ',') : s);
+  function ocrPage(words, width, height) {
+    const ws = (words || []).filter(w => w && w.bbox && String(w.text || '').trim()).map(w => ({ text: fixNum(String(w.text).trim()), bbox: w.bbox }));
+    const hs = ws.map(w => w.bbox.y1 - w.bbox.y0).filter(h => h > 0).sort((a, b) => a - b);
+    const k = 9 / (hs[Math.floor(hs.length / 2)] || 10);
+    const H = height * k;
+    return { height: H, rotate: 0, items: ws.map(w => {
+      const b = w.bbox, hh = (b.y1 - b.y0) * k;
+      return { str: String(w.text), transform: [hh, 0, 0, hh, b.x0 * k, H - b.y1 * k], width: (b.x1 - b.x0) * k, height: hh };
+    }) };
+  }
+  const PHOTO_MSG = '写真から明細を読めませんでした。明るい所で、紙を真上から大きく撮ってください';
+
   /* ---------- ファイルを読む（ブラウザだけ） ---------- */
-  const extOf = name => (String(name || '').toLowerCase().match(/\.(pdf|xlsx|xlsm|xls)$/) || [])[1] || '';
-  async function readFile(file) {
-    const ext = extOf(file.name), buf = await file.arrayBuffer();
+  const IMG = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'heic', 'heif'];
+  const extOf = name => (String(name || '').toLowerCase().match(/\.(pdf|xlsx|xlsm|xls|jpg|jpeg|png|webp|gif|bmp|heic|heif)$/) || [])[1] || '';
+  // 写真を 2000px 以下に縮めた canvas にする（大きいままだと遅い。縦横は端末が写真に入れた向きのまま）
+  async function toCanvas(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      const s = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth * s);
+      c.height = Math.round(img.naturalHeight * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      return c;
+    } catch (e) { throw new Error('この写真は開けませんでした（jpg か png にしてください）'); }
+    finally { URL.revokeObjectURL(url); }
+  }
+  // onStep(文): 進み具合（写真だけ。辞書の取得と認識に時間がかかる）
+  async function readFile(file, onStep) {
+    const ext = extOf(file.name);
+    if (IMG.includes(ext)) {
+      const canvas = await toCanvas(file);
+      const T = await root.loadTesseract();
+      const step = typeof onStep === 'function' ? onStep : () => {};
+      const worker = await T.createWorker('jpn', 1, { langPath: root.TESS_LANG_PATH,
+        logger: m => { if (m.status === 'recognizing text') step('写真を読み取り中… ' + Math.round((m.progress || 0) * 100) + '%'); else if (/loading language/.test(m.status)) step('日本語の辞書を取得中…'); } });
+      try {
+        const { data } = await worker.recognize(canvas);
+        const res = parsePdfPages([ocrPage(data.words, canvas.width, canvas.height)]);
+        res.photo = true;
+        if (!res.items.length) { res.error = PHOTO_MSG; delete res.image_pdf; }
+        return res;
+      } finally { await worker.terminate(); }
+    }
+    const buf = await file.arrayBuffer();
     if (ext === 'pdf') {
       const pdfjs = await root.loadPdfJs();
       // isEvalSupported:false = フォントの中のスクリプトを動かさない（他社の PDF を読むため）
@@ -569,7 +618,7 @@
 
   const api = { UNITS, NUM, norm, skip, cleanNum, parseQtyUnit, stripLeading, isTotalRow, parseTable, pageItems, pageWords, pageText, toLines, toCells,
     strategy1, strategy15, strategy2, PA, PB, PC, PD, PE, extractSubject, extractNotes, extractTotals, extractPdfTotal, dedupSummary,
-    parsePdfPages, parseGrids, cleanDesc, stripRowNumbers, normAmt, prepare, verifyParse, gapRow, METHOD_LABEL, IMAGE_MSG, extOf, readFile };
+    parsePdfPages, parseGrids, cleanDesc, stripRowNumbers, normAmt, prepare, verifyParse, gapRow, METHOD_LABEL, IMAGE_MSG, PHOTO_MSG, ocrPage, IMG, extOf, readFile };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.EstimateImport = api;
 })(typeof window !== 'undefined' ? window : globalThis);
