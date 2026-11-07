@@ -1,18 +1,19 @@
 // js/drawing-ui.js — 10 図面: 取り込み（写真・画像・PDF の1ページ目）→ 部位（天井・壁・床）の色で範囲を描く（四角・多角形・文字）→ 下書き保存／PDFを作る → 共有
 // 図は <img>、印は重ねた <svg>（viewBox = 図の px。点は 0〜1 の割合で drawings.marks に1.5秒で自動保存）。元の図はそのまま（drawings.image_path）。
-// 拡大・移動は @panzoom/panzoom（「動かす」のときだけ bind。「描く」のときは destroy して pointer events で描く）。規則は DrawingLogic。
+// 写真の拡大・移動は @panzoom/panzoom（「写真を拡大」のときだけ bind。「描く」のときは destroy して pointer events で描く）。印を動かす・形を変えるのは道具「動かす」。規則は DrawingLogic。
 const DrawingUi = (() => {
   const DL = DrawingLogic;
   const SAVE_MS = 1500, UNDO_MAX = 20, DRAG_PX = 6, MAX_EDGE = 2048;
   const NS = 'http://www.w3.org/2000/svg';
-  const TOOLS = { rect: '四角', poly: '多角形', text: '文字' };
+  const TOOLS = { rect: '四角', poly: '多角形', text: '文字', move: '動かす' };
   const HINT = {
     rect: '図の上をドラッグすると四角を描きます。印を押すと文字・部位・削除。',
     poly: '角を順に押して、最後に「閉じる」。範囲の上からも描けます（範囲を直すときは「四角」にして押す）。',
     text: '文字を置く所を押してください。文字を押すと直す・削除。',
-    move: '二本指で拡大・移動（パソコンはホイールとドラッグ）。描くときは「描く」に戻します。'
+    move: '印を押して選び、そのままドラッグで動かします。角の丸をドラッグすると形が変わります。もう一度押すと文字・部位・削除。',
+    zoom: '二本指で写真を拡大・移動（パソコンはホイールとドラッグ）。描くときは「描く」に戻します。'
   };
-  let st = null; // { row, caseRow, marks, hist, part, tool, mode, poly, drag, imgW, imgH, pz, timer, saving, dirty, savedAt, err }
+  let st = null; // { row, caseRow, marks, hist, part, tool, mode, poly, drag, sel, imgW, imgH, pz, timer, saving, dirty, savedAt, err }
 
   async function create(caseRow) {
     const { data, error } = await sb.from('drawings').insert({ case_id: caseRow.id, marks: [] }).select().single();
@@ -149,6 +150,14 @@ const DrawingUi = (() => {
       }
       svg.appendChild(g);
     });
+    // 「動かす」で選んだ印: 太い枠と取っ手
+    const sel = st.tool === 'move' && st.sel ? st.marks.find(m => m.id === st.sel) : null;
+    if (!sel) st.sel = null;
+    if (sel) {
+      svg.querySelector('g[data-id="' + sel.id + '"]').setAttribute('data-sel', '1');
+      DL.handles(sel).forEach((h, i) => { const [x, y] = px(h); svg.appendChild(svgEl('circle', { class: 'dw-handle', 'data-handle': i, cx: x, cy: y, r: fontPx() * 0.6, fill: '#fff', stroke: DL.PARTS[sel.part].color, 'stroke-width': '2', 'vector-effect': 'non-scaling-stroke' })); });
+    }
+    renderSelBar(sel);
     // 描いている途中（四角のドラッグ・多角形の点）
     if (st.drag && st.drag.moved && st.tool === 'rect') {
       const b = DL.bbox([st.drag.p0, st.drag.p1]);
@@ -176,6 +185,11 @@ const DrawingUi = (() => {
       li.append(sw, mk('span', null, [x.label, x.count ? x.count + 'か所' : '', x.texts.join('・')].filter(Boolean).join(' ')));
       box.appendChild(li);
     });
+  }
+  function renderSelBar(sel) {
+    const bar = $('dw-selbar');
+    bar.hidden = !sel;
+    if (sel) $('dw-sel-t').textContent = DL.PARTS[sel.part].label + 'の' + TOOLS[sel.type] + (sel.label ? '「' + sel.label + '」' : '') + ' を選んでいます';
   }
   function renderPolyBar() {
     const bar = $('dw-polybar');
@@ -233,15 +247,31 @@ const DrawingUi = (() => {
       if (multi) return;
       e.preventDefault();
       try { svg.setPointerCapture(e.pointerId); } catch (x) { /* 取れなくても描ける */ }
-      const { p } = ratioOf(e);
+      const { p, size } = ratioOf(e);
       st.drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, p0: p, p1: p, moved: false };
+      if (st.tool === 'move') {
+        // 選んでいる印の取っ手 → 形を変える。印の上 → 選んで動かす。何も無い所 → 選択をやめる
+        const sel = st.sel ? st.marks.find(m => m.id === st.sel) : null;
+        const h = sel ? DL.hitHandle(sel, p, size) : -1;
+        const hit = h >= 0 ? sel : DL.hitTest(st.marks, p, size);
+        Object.assign(st.drag, { kind: h >= 0 ? 'handle' : hit ? 'move' : 'none', handle: h, again: !!hit && hit.id === st.sel, orig: hit ? JSON.parse(JSON.stringify(hit)) : null, snap: JSON.stringify(st.marks) });
+        st.sel = hit ? hit.id : null;
+        renderMarks();
+      }
     });
     svg.addEventListener('pointermove', e => {
       const d = st && st.drag;
       if (!d || d.id !== e.pointerId) return;
       d.p1 = ratioOf(e).p;
       if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) >= DRAG_PX) d.moved = true;
-      if (d.moved && st.tool === 'rect') renderMarks();
+      if (!d.moved) return;
+      if (st.tool === 'rect') renderMarks();
+      if (st.tool === 'move' && d.orig) {
+        const i = st.marks.findIndex(m => m.id === d.orig.id);
+        if (i < 0) return;
+        st.marks[i] = d.kind === 'handle' ? DL.moveHandle(d.orig, d.handle, d.p1) : DL.moveMark(d.orig, d.p1.x - d.p0.x, d.p1.y - d.p0.y);
+        renderMarks();
+      }
     });
     svg.addEventListener('pointerup', e => {
       up(e);
@@ -249,6 +279,11 @@ const DrawingUi = (() => {
       if (!d || d.id !== e.pointerId) return;
       st.drag = null;
       const { p, size } = ratioOf(e);
+      if (st.tool === 'move') {
+        if (d.moved && d.orig) { st.hist.push(d.snap); if (st.hist.length > UNDO_MAX) st.hist.shift(); st.marks = DL.normalize(st.marks); renderMarks(); changed(); }
+        else if (!d.moved && d.again && d.orig) markMenu(d.orig);
+        return;
+      }
       if (d.moved && st.tool === 'rect') {
         const b = DL.bbox([d.p0, p]);
         if (b.w * size.w >= DRAG_PX && b.h * size.h >= DRAG_PX) edit(() => st.marks.push({ id: DL.newMarkId(), type: 'rect', part: st.part, points: [d.p0, p], label: '' }));
@@ -257,7 +292,7 @@ const DrawingUi = (() => {
       }
       if (!d.moved) tapAt(p, size);
     });
-    svg.addEventListener('pointercancel', e => { up(e); if (st && st.drag) { st.drag = null; renderMarks(); } });
+    svg.addEventListener('pointercancel', e => { up(e); if (st && st.drag) { if (st.drag.snap && st.drag.moved) st.marks = JSON.parse(st.drag.snap); st.drag = null; renderMarks(); } });
   }
   async function tapAt(p, size) {
     if (st.poly) { st.poly.push(p); renderMarks(); return; }
@@ -298,7 +333,7 @@ const DrawingUi = (() => {
     document.querySelectorAll('#dw-parts .dw-part').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.part === st.part)));
     document.querySelectorAll('#dw-tools button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === st.tool)));
     document.querySelectorAll('#dw-mode button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === st.mode)));
-    $('dw-hint').textContent = HINT[st.mode === 'move' ? 'move' : st.tool];
+    $('dw-hint').textContent = HINT[st.mode === 'move' ? 'zoom' : st.tool];
   }
   const wheel = e => { if (st && st.pz) st.pz.zoomWithWheel(e); };
   function setMode(mode) {
@@ -337,12 +372,12 @@ const DrawingUi = (() => {
       parts.appendChild(b);
     });
     Object.entries(TOOLS).forEach(([k, label]) => {
-      const b = dBtn(label, null, () => { if (!st) return; st.tool = k; st.poly = null; setMode('draw'); renderMarks(); });
+      const b = dBtn(label, null, () => { if (!st) return; st.tool = k; st.poly = null; st.sel = null; setMode('draw'); renderMarks(); });
       b.id = 'dw-tool-' + k;
       b.dataset.tool = k;
       $('dw-tools').appendChild(b);
     });
-    [['draw', '描く'], ['move', '動かす']].forEach(([k, label]) => {
+    [['draw', '描く'], ['move', '写真を拡大']].forEach(([k, label]) => {
       const b = dBtn(label, null, () => { if (!st) return; setMode(k); renderMarks(); });
       b.id = 'dw-mode-' + k;
       b.dataset.mode = k;
@@ -370,6 +405,8 @@ const DrawingUi = (() => {
       edit(() => st.marks.push({ id: DL.newMarkId(), type: 'poly', part: st.part, points: pts, label: '' }));
     });
     $('dw-poly-cancel').addEventListener('click', () => { if (st) { st.poly = null; renderMarks(); } });
+    $('dw-sel-menu').addEventListener('click', () => { const m = st && st.marks.find(x => x.id === st.sel); if (m) markMenu(m); });
+    $('dw-sel-off').addEventListener('click', () => { if (st) { st.sel = null; renderMarks(); } });
     $('dw-draft').addEventListener('click', async () => {
       if (!st) return;
       $('dw-draft').disabled = true;
@@ -401,7 +438,7 @@ const DrawingUi = (() => {
     if (r.error) throw r.error;
     if (!r.data) { toast('図面が見つかりませんでした'); location.replace('#cases'); return; }
     const caseRow = (await CasesApi.get(r.data.case_id)) || {};
-    st = { row: r.data, caseRow, marks: DL.normalize(r.data.marks), hist: [], part: 'ceiling', tool: 'rect', mode: 'draw', poly: null, drag: null,
+    st = { row: r.data, caseRow, marks: DL.normalize(r.data.marks), hist: [], part: 'ceiling', tool: 'rect', mode: 'draw', poly: null, drag: null, sel: null,
       imgW: 0, imgH: 0, pz: null, timer: null, saving: null, dirty: false, savedAt: '', err: '' };
     setSub();
     renderButtons();

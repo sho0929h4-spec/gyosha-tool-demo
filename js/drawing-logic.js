@@ -66,6 +66,33 @@
     }) || null;
   }
 
+  // 「動かす」の取っ手（割合の点）: 四角は4つの角（左上→右上→右下→左下）、多角形は角、文字はその点
+  function handles(m) {
+    if (m.type === 'rect') { const b = bbox(m.points); return [{ x: b.x, y: b.y }, { x: b.x + b.w, y: b.y }, { x: b.x + b.w, y: b.y + b.h }, { x: b.x, y: b.y + b.h }]; }
+    return m.points.map(p => ({ x: p.x, y: p.y }));
+  }
+  // 押した所の取っ手の番号（表示で radius px 以内）。無ければ -1
+  function hitHandle(m, pt, size, radius) {
+    const r = radius || 16;
+    return handles(m).findIndex(h => Math.hypot((h.x - pt.x) * size.w, (h.y - pt.y) * size.h) <= r);
+  }
+  // 印ごと動かす（図からはみ出さない分だけ）
+  function moveMark(m, dx, dy) {
+    const b = bbox(m.points);
+    dx = Math.min(1 - b.x - b.w, Math.max(-b.x, dx));
+    dy = Math.min(1 - b.y - b.h, Math.max(-b.y, dy));
+    const r6 = v => Math.round(v * 1e6) / 1e6; // 0.1+0.2 の端数を残さない
+    return Object.assign({}, m, { points: m.points.map(p => ({ x: r6(p.x + dx), y: r6(p.y + dy) })) });
+  }
+  // 取っ手 i を p へ（四角はその角だけ動かして対角の2点に組み直す）
+  function moveHandle(m, i, p) {
+    const q = { x: clamp01(p.x), y: clamp01(p.y) };
+    if (m.type !== 'rect') return Object.assign({}, m, { points: m.points.map((o, j) => (j === i ? q : o)) });
+    const h = handles(m);
+    const fixed = h[(i + 2) % 4]; // 対角はそのまま
+    return Object.assign({}, m, { points: [{ x: Math.min(fixed.x, q.x), y: Math.min(fixed.y, q.y) }, { x: Math.max(fixed.x, q.x), y: Math.max(fixed.y, q.y) }] });
+  }
+
   // A4 の向き（横長の図は横）と、下に凡例の帯 18mm を取った残りに図を収める位置・大きさ（mm）
   function fitPage(imgW, imgH) {
     const land = imgW > imgH;
@@ -82,7 +109,7 @@
   // 「図面_サンプルハイツ_302号室.pdf」（号室が無ければ付けない）
   const fileName = c => ['図面', safe(c && c.name), safe(CL().roomLabel(c && c.room))].filter(Boolean).join('_') + '.pdf';
 
-  const api = { PARTS, ORDER, LABEL_MAX, TEXT_BOX, BAND, normalize, legend, bbox, inPoly, hitTest, fitPage, fileName, newMarkId };
+  const api = { PARTS, ORDER, LABEL_MAX, TEXT_BOX, BAND, normalize, legend, bbox, inPoly, hitTest, handles, hitHandle, moveMark, moveHandle, fitPage, fileName, newMarkId };
   if (inNode) module.exports = api;
   else root.DrawingLogic = api;
 })(typeof window !== 'undefined' ? window : globalThis);
