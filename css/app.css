@@ -171,6 +171,32 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .rm-t { font-size: 15px; font-weight: 600; }
 .rm .btn { align-self: flex-end; }
 
+/* 定型見積（被害復旧工事）の入力 */
+.tk-place { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.tk-days input { flex: 1; }
+.tk-parts { display: flex; flex-direction: column; gap: 8px; }
+.tk-parts details { border: 1px solid #ddd; border-radius: 8px; }
+.tk-parts summary { min-height: 44px; display: flex; align-items: center; padding: 0 12px; cursor: pointer; font-weight: 600; overflow-wrap: anywhere; }
+.tk-sets { display: flex; flex-direction: column; gap: 8px; padding: 0 10px 10px; }
+.btn.tk-set { flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; text-align: left; overflow-wrap: anywhere; }
+.tk-set small { font-size: 12px; color: #555; }
+.tk-g { border: 1px solid #ddd; border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; transition: background-color .3s; }
+.tk-g.tk-flash { background: #eef4ff; }
+.tk-work { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.tk-gbar { display: flex; align-items: center; gap: 6px; }
+.tk-gsum { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.icon-btn { width: 44px; height: 44px; flex: none; border: 1px solid #bbb; border-radius: 8px; background: #fff; font-size: 16px; cursor: pointer; }
+.icon-btn:disabled { opacity: .45; cursor: default; }
+.tk-rate-seg { flex: 1; min-width: 0; }
+.tk-rate-in { width: 72px !important; flex: none; }
+.seg.tk-seg4 button { font-size: 13px; }
+.ln.tk-ed { border-color: #8fb4e8; background: #f5f9ff; }
+input.tk-need { border-color: #b00; }
+.tk-amt { text-align: right; font-variant-numeric: tabular-nums; }
+.tk-foot { align-items: center; }
+.tk-foot-sum { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tk-foot-sum b { font-size: 18px; overflow-wrap: anywhere; }
+
 /* 仕入見積の読み込み（08） */
 .vf { border: 1px solid; border-radius: 10px; padding: 10px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 8px; overflow-wrap: anywhere; }
 .vf.ok { background: #f0fdf4; border-color: #86efac; color: #166534; }

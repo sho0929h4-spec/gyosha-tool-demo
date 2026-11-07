@@ -1,5 +1,5 @@
 // js/app.js — ルーター（location.hash）と共通の道具: $, mk, dBtn, errText, askPopup, showScreen, toast, renderTabs
-//   #login #cases #calendar #daily #daily/{id} #case/new #case/{id} #case/{id}/edit #settings #report/{id} #estimate/{id} #estimate/{id}/import #notice/{id} #drawing/{id} #doc/{type}/{id}
+//   #login #cases #calendar #daily #daily/{id} #case/new #case/{id} #case/{id}/edit #settings #settings/teikei #settings/teikei/{setId} #report/{id} #estimate/{id} #estimate/{id}/import #teikei/{id} #notice/{id} #drawing/{id} #doc/{type}/{id}
 //   ctx = { user, org, membership }（ログインしていなければ null）
 let ctx = null;
 
@@ -126,9 +126,12 @@ const App = (() => {
     [new RegExp('^#case/' + UUID + '/edit$'), id => CaseForm.show(id)],
     [new RegExp('^#case/' + UUID + '$'), id => CaseUi.show(id)],
     [/^#settings$/, () => SettingsUi.show()],
+    [/^#settings\/teikei$/, () => TeikeiRatesUi.showList()],
+    [/^#settings\/teikei\/([^/]+)$/, id => TeikeiRatesUi.showSet(decodeURIComponent(id))],
     [new RegExp('^#report/' + UUID + '$'), id => ReportUi.show(id)],
     [new RegExp('^#estimate/' + UUID + '$'), id => EstimateUi.show(id)],
     [new RegExp('^#estimate/' + UUID + '/import$'), id => EstimateImportUi.show(id)],
+    [new RegExp('^#teikei/' + UUID + '$'), id => TeikeiUi.show(id)],
     [new RegExp('^#notice/' + UUID + '$'), id => NoticeUi.show(id)],
     [new RegExp('^#drawing/' + UUID + '$'), id => DrawingUi.show(id)],
     [new RegExp('^#doc/(report|estimate|notice|drawing|daily)/' + UUID + '$'), (type, id) => PreviewUi.show(type, id)]

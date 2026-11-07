@@ -15,7 +15,7 @@
   const now = () => new Date().toISOString();
   const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () => (Math.random() * 16 | 0).toString(16)));
   const copy = v => (v == null ? v : JSON.parse(JSON.stringify(v)));
-  const TABLES = ['orgs', 'memberships', 'clients', 'cases', 'reports', 'estimates', 'notices', 'drawings', 'doc_shares', 'estimate_templates', 'estimate_presets', 'rate_master', 'daily_reports'];
+  const TABLES = ['orgs', 'memberships', 'clients', 'cases', 'reports', 'estimates', 'notices', 'drawings', 'doc_shares', 'estimate_templates', 'estimate_presets', 'rate_master', 'daily_reports', 'teikei_rates'];
 
   function seed() {
     const t = now();
@@ -48,30 +48,32 @@
     cases: { insert: ['name', 'room', 'address', 'client_id', 'client_name', 'client_contact', 'client_email', 'memo', 'survey_at', 'work_start', 'work_end'],
       update: ['name', 'room', 'address', 'client_id', 'client_name', 'client_contact', 'client_email', 'memo', 'survey_at', 'work_start', 'work_end', 'archived_at'], del: true },
     reports: { insert: ['case_id', 'work_type', 'data', 'photos'], update: ['work_type', 'data', 'photos'], del: true },
-    estimates: { insert: ['case_id', 'series_id', 'version', 'number', 'data'], update: ['data', 'status', 'number'], del: true },
+    estimates: { insert: ['case_id', 'series_id', 'version', 'number', 'kind', 'data'], update: ['data', 'status', 'number'], del: true },
     notices: { insert: ['case_id', 'data'], update: ['data'], del: true },
     drawings: { insert: ['case_id', 'image_path', 'marks'], update: ['image_path', 'marks'], del: true },
     doc_shares: { insert: ['case_id', 'doc_type', 'doc_id', 'via', 'pdf_path'], update: ['undone_at'] },
     estimate_templates: { insert: ['owner_user_id', 'name', 'lines', 'sort'], update: ['name', 'lines', 'sort'], del: true },
     estimate_presets: { insert: ['owner_user_id', 'text', 'unit', 'price', 'sort'], update: ['text', 'unit', 'price', 'sort'], del: true },
     rate_master: { insert: RATE_COLS, update: RATE_COLS, del: true },
-    daily_reports: { insert: ['date', 'author', 'sites', 'notes'], update: ['date', 'author', 'sites', 'notes'], del: true }
+    daily_reports: { insert: ['date', 'author', 'sites', 'notes'], update: ['date', 'author', 'sites', 'notes'], del: true },
+    teikei_rates: { insert: ['data'], update: ['data'], del: true }
   };
   const DEFAULTS = {
     clients: { contact: '', email: '' },
     cases: { room: '', address: '', client_id: null, client_name: '', client_contact: '', client_email: '', memo: '', survey_at: null, work_start: null, work_end: null, archived_at: null },
     reports: { work_type: 'investigate', data: {}, photos: [] },
-    estimates: { version: 1, number: '', status: 'draft', data: {} },
+    estimates: { version: 1, number: '', status: 'draft', kind: 'normal', data: {} },
     notices: { data: {} },
     drawings: { image_path: null, marks: [] },
     doc_shares: { pdf_path: null, undone_at: null },
     estimate_templates: { owner_user_id: null, lines: [], sort: 0 },
     estimate_presets: { owner_user_id: null, unit: '', price: 0, sort: 0 },
     rate_master: { client: '', vendor: '', property: '', unit: '', quantity: 1, source: '', date: null },
-    daily_reports: { author: '', sites: [], notes: '' }
+    daily_reports: { author: '', sites: [], notes: '' },
+    teikei_rates: { data: {} }
   };
   const HAS_CREATED_BY = ['cases', 'reports', 'estimates', 'notices', 'drawings', 'daily_reports'];
-  const HAS_UPDATED_AT = ['cases', 'reports', 'estimates', 'notices', 'drawings', 'daily_reports'];
+  const HAS_UPDATED_AT = ['cases', 'reports', 'estimates', 'notices', 'drawings', 'daily_reports', 'teikei_rates'];
   const CASE_CHILD = ['reports', 'estimates', 'notices', 'drawings', 'doc_shares'];
   const err = (message, code) => ({ message, code: code || 'P0001' });
   const denied = () => err('permission denied', '42501');
@@ -90,6 +92,9 @@
     if (t === 'cases' && r.client_id && !db.clients.some(c => c.id === r.client_id && c.org_id === r.org_id)) return err('foreign key violation', '23503');
     if (t === 'clients' && db.clients.some(c => c.id !== r.id && c.org_id === r.org_id && c.name === r.name)) return err('duplicate key value violates unique constraint', '23505');
     if (t === 'estimates' && db.estimates.some(x => x.id !== r.id && x.series_id === r.series_id && x.version === r.version)) return err('duplicate key value violates unique constraint', '23505');
+    if (t === 'estimates' && r.kind !== undefined && !['normal', 'teikei'].includes(r.kind)) return err('check constraint', '23514');
+    if (t === 'teikei_rates' && db.teikei_rates.some(x => x.id !== r.id && x.org_id === r.org_id)) return err('duplicate key value violates unique constraint', '23505');
+    if (t === 'teikei_rates' && (!r.data || typeof r.data !== 'object' || Array.isArray(r.data))) return err('check constraint', '23514');
     if (CASE_CHILD.includes(t) && !(t === 'doc_shares' && r.case_id == null) && !db.cases.some(c => c.id === r.case_id && c.org_id === r.org_id)) return err('foreign key violation', '23503');
     if (t === 'reports' && !['investigate', 'work', 'other', 'repair', 'restore'].includes(r.work_type)) return err('check constraint', '23514');
     if (t === 'doc_shares' && (!['report', 'estimate', 'notice', 'drawing', 'daily'].includes(r.doc_type) || !['share', 'mail', 'line', 'download'].includes(r.via))) return err('check constraint', '23514');

@@ -18,8 +18,12 @@ const CaseUi = (() => {
     });
     $('tool-estimate').addEventListener('click', async () => {
       if (!cur) return;
+      // 通常見積もり（OK）か定型見積もり（被害復旧工事）か。× ／ キャンセルは何もしない
+      const a = await askPopup('どちらの見積書を作りますか？', { title: '見積書', okLabel: '通常見積もり', more: [{ id: 'est-kind-teikei', label: '定型見積もり（被害復旧工事）', value: 'teikei' }], id: 'est-kind-ask' });
+      if (!a) return;
+      const teikei = a.more === 'teikei';
       $('tool-estimate').disabled = true;
-      try { location.hash = '#estimate/' + (await EstimatesApi.createDraft(cur)).id; }
+      try { location.hash = (teikei ? '#teikei/' : '#estimate/') + (await EstimatesApi.createDraft(cur, null, teikei ? 'teikei' : undefined)).id; }
       catch (e) { $('case-msg').textContent = '見積書を作れませんでした: ' + errText(e); }
       finally { $('tool-estimate').disabled = false; }
     });

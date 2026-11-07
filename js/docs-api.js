@@ -33,8 +33,9 @@ const DocsApi = (() => {
       if (!url) throw new Error('PDFのリンクを作れませんでした');
       return { path, url };
     },
-    // 書類の名前（案件画面の一覧・プレビュー・共有の文面）。見積書は「見積書 EST-… 第N版」、番号がまだなら「見積書（下書き）」。工事掲示は「工事掲示 302号室」、図面は「図面」
+    // 書類の名前（案件画面の一覧・プレビュー・共有の文面）。見積書は「見積書 EST-… 第N版」、番号がまだなら「見積書（下書き）」（定型見積は「定型見積書 …」）。工事掲示は「工事掲示 302号室」、図面は「図面」
     title: (type, row) => (type === 'report' ? ReportLogic.docLabel(row.work_type, row.data)
+      : type === 'estimate' && row.kind === 'teikei' ? TeikeiLogic.docLabel(row)
       : type === 'estimate' ? (row.number ? '見積書 ' + row.number + ' 第' + row.version + '版' : '見積書（下書き）')
       : type === 'notice' ? NoticeLogic.docLabel(row.data) : type === 'drawing' ? '図面' : type === 'daily' ? DailyLogic.title(row) : '書類')
   };

@@ -520,6 +520,7 @@ const EstimateUi = (() => {
     showScreen('estimate');
     const row = await EstimatesApi.get(id);
     if (!row) { toast('見積書が見つかりませんでした'); location.replace('#cases'); return; }
+    if (row.kind === 'teikei') { location.replace('#teikei/' + id); return; }
     const [caseRow, templates, presets, rates] = await Promise.all([CasesApi.get(row.case_id), EstimatesApi.templates(), EstimatesApi.presets(), EstimatesApi.rates()]);
     const ro = row.status !== 'draft';
     const d = Object.assign(EL.newData(caseRow, ctx.org, ctx.membership, new Date()), row.data || {});

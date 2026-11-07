@@ -5,15 +5,23 @@ const EstimatesApi = (() => {
   const EL = EstimateLogic;
   return {
     get: async id => ok(await sb.from('estimates').select('*').eq('id', id).maybeSingle()),
-    // 新しい系列（series_id は DB の既定値）か、fromRow の系列の次の版（同じ番号・中身の写し。見積日と有効期限は今日から）
-    async createDraft(caseRow, fromRow) {
-      if (!fromRow) return ok(await sb.from('estimates').insert({ case_id: caseRow.id, data: EL.newData(caseRow, ctx.org, ctx.membership, new Date()) }).select().single());
+    // 新しい系列（series_id は DB の既定値）か、fromRow の系列の次の版（同じ番号・同じ種類・中身の写し。見積日と有効期限は今日から）
+    //   kind: 'normal'（通常見積）| 'teikei'（定型見積。中身は TeikeiLogic.newData・単価表は会社のもの）。作ったあとは変えない
+    async createDraft(caseRow, fromRow, kind) {
+      const today = new Date();
+      if (!fromRow) {
+        const k = kind === 'teikei' ? 'teikei' : 'normal';
+        const data = k === 'teikei' ? TeikeiLogic.newData(caseRow, await TeikeiApi.rates(), today) : EL.newData(caseRow, ctx.org, ctx.membership, today);
+        return ok(await sb.from('estimates').insert({ case_id: caseRow.id, kind: k, data }).select().single());
+      }
       const last = ok(await sb.from('estimates').select('version').eq('series_id', fromRow.series_id).order('version', { ascending: false }).limit(1));
       const data = JSON.parse(JSON.stringify(fromRow.data || {}));
-      const today = new Date();
-      Object.assign(data, { date: EL.ymd(today), due: EL.defaultDue(today), pdf_at: null });
+      const k = fromRow.kind === 'teikei' ? 'teikei' : 'normal';
+      if (k === 'teikei') Object.assign(data.cover = data.cover || {}, { date: EL.ymd(today), exp: EL.defaultDue(today) });
+      else Object.assign(data, { date: EL.ymd(today), due: EL.defaultDue(today) });
+      data.pdf_at = null;
       return ok(await sb.from('estimates').insert({ case_id: fromRow.case_id, series_id: fromRow.series_id, version: (last[0] ? last[0].version : fromRow.version) + 1,
-        number: fromRow.number || '', data }).select().single());
+        number: fromRow.number || '', kind: k, data }).select().single());
     },
     save: async (id, patch) => ok(await sb.from('estimates').update(patch).eq('id', id)),
     // 出した（共有・ダウンロード）: この版を issued、同じ系列のそれより前の issued を superseded（DB の関数で。画面から status は直せない）

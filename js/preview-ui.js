@@ -4,6 +4,7 @@
 //   編集に戻る／LINEで共有／メールで共有／PDFをダウンロード／送付の記録（送付済み（日時・手段）・送っていないに戻す）
 //   見積書: 共有・ダウンロードを記録したら、その版を発行済みにする（EstimatesApi.issue）。発行済みの版は「編集に戻る」の代わりに「新しい版を作って直す」
 //   見積書の下書きは画像でなく紙面そのもの（EstimateSheetUi）を出して、その上で直せる。PDF は LINE／メール／ダウンロードを押したときにその時点の中身で作る
+//   定型見積（kind='teikei'）は下書きでも画像（TeikeiPdf）。直すのは #teikei/{id}。単価マスタへの登録はしない（紙面を使わないので recorded の登録の所を通らない）
 //   報告書は発行済みの区別が無いので、いつも紙面（ReportSheetUi）。共有・ダウンロードの後も紙面のまま
 const PreviewUi = (() => {
   let st = null; // { type, row, caseRow, label, blob, pages, fname, sheet }
@@ -71,6 +72,8 @@ const PreviewUi = (() => {
           blob = await DailyPdf.toBlob({ daily: s.row, org: ctx.org, onStep, onPages });
         } else if (s.type === 'notice') {
           blob = await NoticePdf.toBlob({ notice: s.row, org: ctx.org, onStep, onPages });
+        } else if (s.type === 'estimate' && s.row.kind === 'teikei') {
+          blob = await TeikeiPdf.toBlob({ estimate: s.row, caseRow: s.caseRow, org: ctx.org, onStep, onPages });
         } else if (s.type === 'estimate') {
           const sealUrl = await sealOf();
           blob = await EstimatePdf.toBlob({ estimate: live ? Object.assign({}, s.row, { data: EstimateSheetUi.data() }) : s.row, org: ctx.org, sealUrl, onStep, onPages });
@@ -210,12 +213,13 @@ const PreviewUi = (() => {
     // 工事掲示は号室ごと（別の号室に複製したもの）なので、共有の件名は掲示の物件名・号室にする
     if (type === 'notice') caseRow = Object.assign({}, caseRow, { name: d.propertyName || caseRow.name, room: d.roomNo || caseRow.room });
     const label = DocsApi.title(type, r.data);
-    st = { type, row: r.data, caseRow, label, blob: null, pages: [], sheet: type === 'report' || (type === 'estimate' && r.data.status === 'draft'),
-      fname: daily ? DailyLogic.fileName(r.data) : type === 'estimate' ? EstimatePdf.fileName(d.subject) : type === 'notice' ? NoticeLogic.fileName(d) : type === 'drawing' ? DrawingLogic.fileName(caseRow) : ShareLogic.fileName(label, caseRow) };
+    const teikei = type === 'estimate' && r.data.kind === 'teikei';
+    st = { type, row: r.data, caseRow, label, blob: null, pages: [], sheet: type === 'report' || (type === 'estimate' && r.data.status === 'draft' && !teikei),
+      fname: daily ? DailyLogic.fileName(r.data) : teikei ? TeikeiLogic.fileName(caseRow) : type === 'estimate' ? EstimatePdf.fileName(d.subject) : type === 'notice' ? NoticeLogic.fileName(d) : type === 'drawing' ? DrawingLogic.fileName(caseRow) : ShareLogic.fileName(label, caseRow) };
     $('dv-title').textContent = st.label;
     $('dv-sub').textContent = daily ? DailyLogic.dateJa(r.data.date) : CaseLogic.placeName(caseRow) + ' ・ ' + CaseLogic.md(r.data.created_at) + ' 作成';
     $('dv-back').href = daily ? '#daily' : '#case/' + caseRow.id;
-    $('dv-edit').href = '#' + type + '/' + id;
+    $('dv-edit').href = '#' + (teikei ? 'teikei' : type) + '/' + id;
     editBtns();
     renderSent();
     if (!st.sheet) { await makePdf(); return; }
