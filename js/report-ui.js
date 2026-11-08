@@ -96,17 +96,19 @@ const ReportUi = (() => {
     e.addEventListener('change', () => { st.d[key] = e.value; changed(); if (rerender) render(); });
     return e;
   }
-  // 押すと ✓ のチップ。list = st.d の配列のキー
+  // 押すと ✓ のチップ。list = st.d の配列のキー、または { get, set }（places のような入れ子の配列）
   function chip(text, list, val, onToggle) {
     const b = mk('button', 'chip');
     b.type = 'button';
     b.append(mk('span', 'chip-box', '✓'), mk('span', null, text));
-    const on = () => (st.d[list] || []).includes(val);
+    const get = () => (typeof list === 'string' ? st.d[list] : list.get()) || [];
+    const set = a => (typeof list === 'string' ? (st.d[list] = a) : list.set(a));
+    const on = () => get().includes(val);
     b.setAttribute('aria-pressed', String(on()));
     b.addEventListener('click', () => {
-      const a = (st.d[list] || []).filter(x => x !== val);
+      const a = get().filter(x => x !== val);
       if (!on()) a.push(val);
-      st.d[list] = a;
+      set(a);
       b.setAttribute('aria-pressed', String(on()));
       changed();
       if (onToggle) onToggle(on());
@@ -166,8 +168,28 @@ const ReportUi = (() => {
       cfg.checkGroups.forEach((grp, gi) => {
         if (grp.title) c.appendChild(mk('div', 'grp-t', grp.title));
         const chips = mk('div', 'chips');
-        grp.items.forEach(i => chips.appendChild(chip(i, 'items', i)));
+        // 場所を選べる項目（排水テスト・その他）: 押すと下に場所のチップが出る
+        const placeRows = [];
+        const placeRow = (item, id) => {
+          if (!(grp.placeItems || []).includes(item)) return null;
+          const row = mk('div', 'place-row');
+          row.id = id;
+          row.hidden = !(st.d.items || []).includes(item);
+          row.appendChild(mk('div', 'grp-t', item + 'の場所'));
+          const pc = mk('div', 'chips');
+          st.d.places = st.d.places || {};
+          const bind = { get: () => st.d.places[item], set: a => { st.d.places[item] = a; } };
+          RL.RESTORE_PLACES.forEach(p => pc.appendChild(chip(p, bind, p)));
+          row.appendChild(pc);
+          placeRows.push(row);
+          return row;
+        };
+        grp.items.forEach((i, ii) => {
+          const row = placeRow(i, `rp-place-${gi}-${ii}`);
+          chips.appendChild(chip(i, 'items', i, row ? on => { row.hidden = !on; } : null));
+        });
         if (grp.free) {
+          const row = placeRow(grp.freePrefix, `rp-place-${gi}-free`);
           const free = document.createElement('input');
           free.type = 'text';
           free.id = 'rp-free-' + gi;
@@ -178,16 +200,18 @@ const ReportUi = (() => {
           free.value = st.d.free[grp.freePrefix] || '';
           free.hidden = !(st.d.items || []).includes(grp.freePrefix);
           free.addEventListener('input', () => { st.d.free[grp.freePrefix] = free.value; changed(); });
-          chips.appendChild(chip('自由記載', 'items', grp.freePrefix, on => { free.hidden = !on; if (on) free.focus(); }));
-          c.append(chips, free);
-        } else c.appendChild(chips);
+          chips.appendChild(chip('自由記載', 'items', grp.freePrefix, on => { if (row) row.hidden = !on; free.hidden = !on; if (on) free.focus(); }));
+          c.append(chips, ...placeRows, free);
+        } else c.append(chips, ...placeRows);
       });
       body.appendChild(c);
     }
 
     // 作業内容（区分ごとの欄）
     const ct = card(cfg.contentCardTitle, 'rp-content');
-    ct.appendChild(field(cfg.f1Label, area('rp-f1', 'f1', 5, cfg.f1ph), { req: cfg.f1Req, hint: RL.HINT.f1 }));
+    // 漏水調査（f1Last）は作業実施内容を一番下（次の必要な対応の上）に出す
+    const f1 = field(cfg.f1Label, area('rp-f1', 'f1', 5, cfg.f1ph), { req: cfg.f1Req, hint: RL.HINT.f1 });
+    if (!cfg.f1Last) ct.appendChild(f1);
     if (cfg.showLeak) {
       ct.appendChild(field('漏水の状況', select('rp-leak', 'leak', RL.LEAK.map(v => [v, v]), true)));
       if (String(st.d.leak || '').startsWith('漏れている')) {
@@ -204,7 +228,8 @@ const ReportUi = (() => {
     if (cfg.showNote) ct.appendChild(field('申し送り', area('rp-note', 'note', 3, cfg.noteph)));
     if (cfg.showF2) ct.appendChild(field('原因', area('rp-f2', 'f2', 2), { hint: RL.HINT.f2 }));
     if (cfg.showReason) ct.appendChild(field('原因と判断した理由', area('rp-reason', 'reason', 2), { hint: RL.HINT.reason }));
-    if (cfg.showF4) ct.appendChild(field('次の対応方針', area('rp-f4', 'f4', 2), { hint: RL.HINT.f4 }));
+    if (cfg.f1Last) ct.appendChild(f1);
+    if (cfg.showF4) ct.appendChild(field('次の必要な対応', area('rp-f4', 'f4', 2), { hint: RL.HINT.f4 }));
     body.appendChild(ct);
 
     // 写真

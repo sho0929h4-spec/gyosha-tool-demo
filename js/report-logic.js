@@ -6,7 +6,9 @@
   const str = v => String(v == null ? '' : v).trim();
   const WTYPE_MODE = { '漏水調査': 'investigate', '工事': 'work', 'その他': 'other', '調査': 'investigate', '設備修繕': 'work', '復旧工事': 'work' };
   const MODE_LABEL = { investigate: '漏水調査', work: '工事', other: 'その他' };
-  const INV_ITEMS = ['目視確認', '耐圧テスト（給水管）', '耐圧テスト（給湯管）', 'スコープカメラ調査', '開口調査', '排水テスト', '給湯管更新・交換', '給水管更新・交換', '配管修繕', '水栓交換', '開口補修・復旧', '防水工事'];
+  const INV_ITEMS = ['目視確認', '耐圧テスト（給湯管）', '耐圧テスト（給水管）', '排水テスト', '洗濯パン脱着', '点検口から床下確認'];
+  // 場所を選べる項目（漏水調査。排水テストとその他。選んだ場所は data.places[項目] = ['キッチン', ...]。出力は「排水テスト（キッチン・浴室）」）
+  const INV_PLACE_ITEMS = ['排水テスト', 'その他'];
   const WORK_ITEMS = ['給湯管更新・交換', '給水管更新・交換', '配管修繕', '水栓交換', '開口補修・復旧', '防水工事'];
   const RESTORE_PLACES = ['廊下', 'キッチン', '洗面所', '浴室', 'トイレ', '居室', 'ベランダ'];
   const RESTORE_PARTS = ['天井', '壁', '床', 'ダウンライト'];
@@ -26,7 +28,8 @@
   const MODES = {
     investigate: {
       checkCardTitle: '作業実施項目', contentCardTitle: '作業内容',
-      checkGroups: [{ title: null, items: INV_ITEMS, free: true, freePrefix: 'その他' }],
+      checkGroups: [{ title: null, items: INV_ITEMS, free: true, freePrefix: 'その他', placeItems: INV_PLACE_ITEMS }],
+      f1Last: true,
       f1Label: '作業実施内容', f1Req: true,
       showLeak: true, showAfter: false, showF2: true, showReason: true, showF4: true,
       f1ph: '例：605号室キッチン脇のダウンライトまわりから漏水を確認。給水管の耐圧テストを実施。',
@@ -34,12 +37,12 @@
       reqField: 'f1',
       rSection: '調査結果',
       rRows: [
-        { label: '作業実施内容', field: 'f1' },
         { label: '漏水の状況', field: 'leak' },
         { label: '漏水時の対応', field: 'leakAction' },
         { label: '原　因', field: 'f2' },
         { label: '原因と判断した理由', field: 'reason' },
-        { label: '次の対応方針', field: 'f4', next: true }
+        { label: '作業実施内容', field: 'f1' },
+        { label: '次の必要な対応', field: 'f4', next: true }
       ]
     },
     work: {
@@ -81,7 +84,7 @@
   // 欄の説明（report-tool の hint をそのまま）
   const HINT = {
     f1: '実施した作業・調査の詳細・手順・確認箇所など',
-    f2: '特定できた場合のみ。不明な場合は次の対応方針へ。',
+    f2: '特定できた場合のみ。不明な場合は次の必要な対応へ。',
     reason: 'そう判断した根拠・確認した事実など（自由記載）',
     f4: '原因不明時や追加工事が必要な場合の方針'
   };
@@ -98,19 +101,20 @@
     const c = caseRow || {};
     return {
       prop: str(c.name), room: str(c.room), caseNo: `${String(d.getFullYear()).slice(2)}${pad(d.getMonth() + 1)}${pad(d.getDate())}-01`,
-      workDate: isoDate(d), ts: '', te: '', items: [], free: {},
+      workDate: isoDate(d), ts: '', te: '', items: [], free: {}, places: {},
       f1: '', note: '', workLabel: '', f2: '', f4: '', reason: '', leak: '', leakAction: '', leakRoom: '', afterStatusSel: '', afterNote: '',
       workChecklist: [], keyChecklist: [], keyReturn: ''
     };
   }
   const arr = v => (Array.isArray(v) ? v : []);
-  // 実施項目／施工範囲（今の区分の項目だけ。自由記載は「その他: 〇〇」）
+  // 実施項目／施工範囲（今の区分の項目だけ。場所を選べる項目は「排水テスト（キッチン・浴室）」、自由記載は「その他: 〇〇」）
   function checkedItems(d, mode) {
-    const on = arr(d && d.items), free = (d && d.free) || {};
+    const on = arr(d && d.items), free = (d && d.free) || {}, places = (d && d.places) || {};
     const out = [];
     MODES[modeOf(mode)].checkGroups.forEach(g => {
-      g.items.forEach(i => { if (on.includes(i)) out.push(i); });
-      if (g.free && on.includes(g.freePrefix)) { const t = str(free[g.freePrefix]); out.push(t ? `${g.freePrefix}: ${t}` : g.freePrefix); }
+      const withPlace = i => { const p = arr(g.placeItems).includes(i) ? arr(places[i]).filter(x => RESTORE_PLACES.includes(x)) : []; return p.length ? `${i}（${p.join('・')}）` : i; };
+      g.items.forEach(i => { if (on.includes(i)) out.push(withPlace(i)); });
+      if (g.free && on.includes(g.freePrefix)) { const t = str(free[g.freePrefix]); out.push(t ? `${withPlace(g.freePrefix)}: ${t}` : withPlace(g.freePrefix)); }
     });
     return out;
   }
@@ -170,7 +174,7 @@
   const modeName = (mode, d) => (modeOf(mode) === 'other' ? str(d && d.workLabel) || 'その他' : MODE_LABEL[modeOf(mode)]);
   const docLabel = (mode, d) => modeName(mode, d) + '報告書';
 
-  const api = { WTYPE_MODE, MODE_LABEL, INV_ITEMS, RESTORE_PLACES, RESTORE_PARTS, AFTER_STATUS, LEAK, LEAK_ACTION, WORK_CHECKLISTS, NOTICE_REMOVED, KEY_CHECKLIST, MODES, HINT, PHASES, PHASE_COLORS,
+  const api = { WTYPE_MODE, MODE_LABEL, INV_ITEMS, INV_PLACE_ITEMS, RESTORE_PLACES, RESTORE_PARTS, AFTER_STATUS, LEAK, LEAK_ACTION, WORK_CHECKLISTS, NOTICE_REMOVED, KEY_CHECKLIST, MODES, HINT, PHASES, PHASE_COLORS,
     modeOf, modeName, newData, checkedItems, leakActionText, afterStatusText, timeStr, fmtDate, todayJa, workItems, workChecked, keyChecked, resultRows, validate, docLabel, setField, movePhoto, removePhoto };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ReportLogic = api;
