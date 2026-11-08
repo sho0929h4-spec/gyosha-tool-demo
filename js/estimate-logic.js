@@ -113,7 +113,8 @@
       { description: '交通費', quantity: 1, unit: '式', unit_price: kotsu, amount: kotsu },
       { description: '諸経費', quantity: 1, unit: '式', unit_price: s, amount: s }] };
   };
-  const TEMPLATES = { chosa1: tmpl('調査①', 25000, 6000), chosa2: tmpl('調査②', 20000, 6000) };
+  // 調査人工 25,000（設計労務単価 大工・内装工 約28,000 の民間水準）・交通費 4,000（都市部の一式の目安）。2026-11-08 に相場へ合わせた（docs/notes/2026-11-08-rates-market.md）
+  const TEMPLATES = { chosa1: tmpl('調査①', 25000, 4000), chosa2: tmpl('調査②', 18000, 4000) };
   // ボタンに出す額（税抜の合計）
   const templateTotal = t => sum(t.items, i => i.amount);
   // 定型を入れる: 原価＝販売（同じ中身）・利益率 0・件名に「調査費用」が無ければ足す（会社の定型 { label, items } にも使う）
