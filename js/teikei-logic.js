@@ -195,7 +195,8 @@
     const c = caseRow || {};
     const d = { cover: { date: EL.ymd(today), to: '', title: autoTitle(str(c.name).trim(), c.room), place: str(c.address), start: '', end: '', pay: '', exp: EL.defaultDue(today) },
       covManual: { title: false, end: false }, days: null, groups: [], keihi: initKeihi(rates, null), preset: 'corridor', presetManual: false,
-      miscRate: 15, taxRate: 10, memo: '', seq: 0, ratesVersion: (rates && rates.version) || '', pdf_at: null };
+      miscRate: 0, taxRate: 10, // 諸経費は 0%（ユーザー決定 2026-11-08。消費税は 10% のまま）
+      memo: '', seq: 0, ratesVersion: (rates && rates.version) || '', pdf_at: null };
     sets(rates).forEach(s => { if (s.options && s.options.default_add) addSet(d, s); });
     d.preset = autoPresetKey(d, rates);
     return applyPreset(d, rates);

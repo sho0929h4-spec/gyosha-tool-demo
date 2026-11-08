@@ -527,7 +527,8 @@ const EstimateUi = (() => {
     // 下書きは会社の今の設定（会社の写し・消費税率）で作る。出した版は当時のまま
     if (!ro) Object.assign(d, { company: EL.companyOf(ctx.org, ctx.membership), tax_rate: num(ctx.org.tax_rate) });
     if (!Array.isArray(d.lines) || !d.lines.length) d.lines = [EL.emptyRow()];
-    st = { row, caseRow: caseRow || {}, d, ro, rates, templates, presets, sugg: [], refs: [], quickOpen: false, shokehiPct: 10,
+    st = { row, caseRow: caseRow || {}, d, ro, rates, templates, presets, sugg: [], refs: [], quickOpen: false, shokehiPct: 0, // 諸経費の%は入れない（0。ユーザー決定 2026-11-08）
+     
       timer: null, saving: null, dirty: false, savedAt: '', err: '', sellAlerts: [], costAlerts: [], checkTimer: null };
     if (!ro) {
       st.sellAlerts = EL.check(EL.rateView(d.lines, 'sell'), rates, { property: prop(), client: str(d.client), kind: 'sell' });

@@ -105,7 +105,7 @@
   }
 
   /* ---------- 定型 ---------- */
-  const TMPL_SHOKEHI_PCT = 0.15;
+  const TMPL_SHOKEHI_PCT = 0; // 諸経費は 0%（ユーザー決定 2026-11-08）
   const tmpl = (label, ninku, kotsu) => {
     const s = round((ninku + kotsu) * TMPL_SHOKEHI_PCT);
     return { label, subjectSuffix: '調査費用', items: [
