@@ -204,7 +204,7 @@
   function loadImage(src) {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      if (/^https?:/i.test(src)) img.crossOrigin = 'anonymous'; // 署名URL（Supabase Storage は CORS 可）。canvas を汚さない
+      if (/^https?:/i.test(src)) img.crossOrigin = 'anonymous'; // 署名URL（写真の置き場の Worker が CORS を許す）。canvas を汚さない
       img.decoding = 'async';
       img.onload = () => resolve(img);
       img.onerror = () => reject(new Error('画像を読み込めませんでした'));

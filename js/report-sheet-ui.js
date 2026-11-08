@@ -163,7 +163,7 @@ const ReportSheetUi = (() => {
       s.dirty = true;
       close();
       try { await flush(); } catch (e) { if (s) { s.photos = before; renderSheet(); } toast('外せませんでした: ' + errText(e)); return; }
-      sb.storage.from('photos').remove([gone.path]); // 06 の削除と同じ（結果は待たない）
+      Files.remove(gone.path); // 06 の削除と同じ（結果は待たない）
     });
     del.id = 'rs-sp-del';
     body.append(nav, del);

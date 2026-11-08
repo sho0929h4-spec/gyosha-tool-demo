@@ -37,11 +37,10 @@ const SettingsUi = (() => {
       try {
         const blob = await shrinkImage(f, 600, 'image/png');
         const p = ctx.org.id + '/org/' + col + '-' + newId() + '.png';
-        const up = await sb.storage.from('photos').upload(p, blob, { contentType: 'image/png' });
-        if (up.error) throw up.error;
+        await Files.upload(p, blob, 'image/png', col === 'logo_path' ? 'logo' : 'seal');
         const old = ctx.org[col];
         await saveOrg({ [col]: p });
-        if (old) sb.storage.from('photos').remove([old]);
+        if (old) Files.remove(old);
         setMsg('so-msg', label + 'を保存しました', true);
       } catch (e) { setMsg('so-msg', label + 'を保存できませんでした: ' + errText(e)); }
       renderImg(hostId, col, label);
@@ -50,7 +49,7 @@ const SettingsUi = (() => {
     host.appendChild(dBtn(path ? '変える' : '選ぶ', 'btn ghost sm', () => input.click()));
     if (path) host.appendChild(dBtn('外す', 'btn ghost sm', async () => {
       if (!(await askPopup(label + 'を外しますか？', { title: label + 'を外す', okLabel: '外す', id: 'img-remove-ask' }))) return;
-      try { await saveOrg({ [col]: null }); sb.storage.from('photos').remove([path]); setMsg('so-msg', label + 'を外しました', true); }
+      try { await saveOrg({ [col]: null }); Files.remove(path); setMsg('so-msg', label + 'を外しました', true); }
       catch (e) { setMsg('so-msg', '外せませんでした: ' + errText(e)); }
       renderImg(hostId, col, label);
     }));
@@ -164,7 +163,7 @@ const SettingsUi = (() => {
     });
     $('sm-pw-save').addEventListener('click', async () => {
       const pw = $('sm-pw').value;
-      if (pw.length < 6) { setMsg('sm-pw-msg', 'パスワードは6文字以上にしてください'); return; }
+      if (pw.length < 8) { setMsg('sm-pw-msg', 'パスワードは8文字以上にしてください'); return; }
       $('sm-pw-save').disabled = true;
       try {
         const { error } = await sb.auth.updateUser({ password: pw });
@@ -189,6 +188,18 @@ const SettingsUi = (() => {
     $('sm-pw').value = '';
     renderImg('so-logo', 'logo_path', 'ロゴ');
     renderImg('so-seal', 'seal_path', '社印');
+    renderUsage();
+  }
+  // 写真・図面の容量（8GB を超えたら赤で。9GB で置けなくなる）
+  async function renderUsage() {
+    const e = $('set-files-use');
+    e.className = 'msg';
+    e.textContent = '確かめています…';
+    try {
+      const n = await Files.usage();
+      e.textContent = (n / 1024 ** 2).toFixed(1) + 'MB ／ 10GB' + (n > Files.WARN ? '　もうすぐいっぱいです。相談してください' : '');
+      e.classList.toggle('err', n > Files.WARN);
+    } catch (x) { e.className = 'msg err'; e.textContent = '容量を確かめられませんでした: ' + errText(x); }
   }
   return { show };
 })();

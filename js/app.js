@@ -172,21 +172,26 @@ const App = (() => {
     await loadCtx(user);
     location.hash = '#cases';
   }
+  let recovering = false;
   async function start() {
     renderTabs();
     sb.auth.onAuthStateChange((ev, session) => {
       if (ev === 'SIGNED_OUT') { ctx = null; location.hash = '#login'; }
-      if (ev === 'PASSWORD_RECOVERY') AuthUi.recovery();
+      // 再設定メールのリンク・招待メールのリンク（js/supabase.js の SB_INVITE）から開いたら、パスワードを決める画面
+      if (ev === 'PASSWORD_RECOVERY' || (ev === 'SIGNED_IN' && window.SB_INVITE)) { window.SB_INVITE = false; recovering = true; AuthUi.recovery(); }
     });
     window.addEventListener('hashchange', route);
     try {
       const { data } = await sb.auth.getSession();
       if (data && data.session) await loadCtx(data.session.user);
+      // 初めの SIGNED_IN が onAuthStateChange を付ける前に済んでいたとき
+      if (data && data.session && window.SB_INVITE) { window.SB_INVITE = false; recovering = true; AuthUi.recovery(); }
     } catch (e) {
       console.error(e);
       ctx = null;
       AuthUi.error('読み込めませんでした: ' + errText(e));
     }
+    if (recovering) return; // パスワードを決める画面のまま（route すると案件の画面に替わってしまう）。決めたら AuthUi が signedIn を呼ぶ
     route();
   }
   // 設定で会社・自分を直したとき
@@ -217,11 +222,8 @@ function shrinkImage(file, maxEdge, type, quality) {
     img.src = url;
   });
 }
-// Storage の非公開ファイル（photos。図面は bucket = 'drawings'）の見るための URL（1時間）
-async function signedUrl(path, bucket) {
-  if (!path) return '';
-  const { data, error } = await sb.storage.from(bucket || 'photos').createSignedUrl(path, 3600);
-  if (error) throw error;
-  return data.signedUrl;
+// 写真・図面・ロゴ・社印の見るための URL（1時間。js/files.js）
+async function signedUrl(path) {
+  return path ? Files.url(path) : '';
 }
 const newId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));

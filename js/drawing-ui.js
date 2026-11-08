@@ -3,7 +3,7 @@
 // 写真の拡大・移動は @panzoom/panzoom（「写真を拡大」のときだけ bind。「描く」のときは destroy して pointer events で描く）。印を動かす・形を変えるのは道具「動かす」。規則は DrawingLogic。
 const DrawingUi = (() => {
   const DL = DrawingLogic;
-  const SAVE_MS = 1500, UNDO_MAX = 20, DRAG_PX = 6, MAX_EDGE = 2048;
+  const SAVE_MS = 1500, UNDO_MAX = 20, DRAG_PX = 6, MAX_EDGE = 1600, QUALITY = 0.8; // 無料枠に収める（今まで 2048・0.9）
   const NS = 'http://www.w3.org/2000/svg';
   const TOOLS = { rect: '四角', poly: '多角形', text: '文字', move: '動かす' };
   const HINT = {
@@ -92,7 +92,7 @@ const DrawingUi = (() => {
       g.fillStyle = '#fff';
       g.fillRect(0, 0, c.width, c.height);
       await page.render({ canvasContext: g, viewport: vp }).promise;
-      const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9));
+      const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', QUALITY));
       c.width = c.height = 0;
       if (!blob) throw new Error('PDFを画像にできませんでした');
       return blob;
@@ -105,14 +105,13 @@ const DrawingUi = (() => {
     msg.textContent = '図面を読み込み中…';
     try {
       const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
-      const blob = isPdf ? await pdfToJpeg(file) : await shrinkImage(file, MAX_EDGE, 'image/jpeg', 0.9);
+      const blob = isPdf ? await pdfToJpeg(file) : await shrinkImage(file, MAX_EDGE, 'image/jpeg', QUALITY);
       const path = ctx.org.id + '/drawings/' + s.row.id + '/' + newId() + '.jpg';
-      const up = await sb.storage.from('drawings').upload(path, blob, { contentType: 'image/jpeg' });
-      if (up.error) throw up.error;
+      await Files.upload(path, blob, 'image/jpeg', 'drawing');
       if (st !== s) return;
       const old = s.row.image_path;
       await saveNow({ image_path: path });
-      if (old) sb.storage.from('drawings').remove([old]);
+      if (old) Files.remove(old);
       msg.textContent = '';
       await renderStage();
     } catch (e) {
@@ -209,7 +208,7 @@ const DrawingUi = (() => {
     st.imgW = st.imgH = 0;
     if (!has) return;
     const s = st;
-    const url = await signedUrl(s.row.image_path, 'drawings');
+    const url = await signedUrl(s.row.image_path);
     const wrap = mk('div', 'dw-pz');
     wrap.id = 'dw-pz';
     const img = mk('img');

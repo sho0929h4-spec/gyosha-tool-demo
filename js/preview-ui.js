@@ -41,7 +41,7 @@ const PreviewUi = (() => {
     box.replaceChildren(row);
     if (last) {
       const undo = dBtn('送っていないに戻す', 'textlink', async () => {
-        if (!(await askPopup('この' + st.label + 'を「送っていない」に戻しますか？\n送付の記録を外します。送った PDF のリンクはそのままです。', { title: '送っていないに戻す', okLabel: '戻す', id: 'dv-undo-ask' }))) return;
+        if (!(await askPopup('この' + st.label + 'を「送っていない」に戻しますか？\n送付の記録を外します。', { title: '送っていないに戻す', okLabel: '戻す', id: 'dv-undo-ask' }))) return;
         try { await DocsApi.undoAll(st.type, st.row.id); } catch (e) { toast('戻せませんでした: ' + errText(e)); return; }
         renderSent();
       });
@@ -66,7 +66,7 @@ const PreviewUi = (() => {
         const onStep = t => { if (st === s) $('dv-progress').textContent = 'PDFを作成中…（' + t + '）'; };
         const onPages = p => { pages = p; };
         if (s.type === 'drawing') {
-          const imgUrl = await signedUrl(s.row.image_path, 'drawings');
+          const imgUrl = await signedUrl(s.row.image_path);
           blob = await DrawingPdf.toBlob({ drawing: s.row, imgUrl, caseRow: s.caseRow, org: ctx.org, onStep, onPages });
         } else if (s.type === 'daily') {
           blob = await DailyPdf.toBlob({ daily: s.row, org: ctx.org, onStep, onPages });
@@ -186,7 +186,7 @@ const PreviewUi = (() => {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
-    try { await DocsApi.record(st.caseRow ? st.caseRow.id : null, st.type, st.row.id, 'download', null); toast('PDFをダウンロードしました'); }
+    try { await DocsApi.record(st.caseRow ? st.caseRow.id : null, st.type, st.row.id, 'download'); toast('PDFをダウンロードしました'); }
     catch (e) { toast('ダウンロードの記録を残せませんでした: ' + errText(e)); renderSent(); return; }
     await recorded();
   }

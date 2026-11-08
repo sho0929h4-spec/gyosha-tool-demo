@@ -44,7 +44,7 @@ const AuthUi = (() => {
     });
     $('recover-save').addEventListener('click', async () => {
       const pw = $('recover-pw').value;
-      if (pw.length < 6) { setMsg('recover-msg', 'パスワードは6文字以上にしてください'); return; }
+      if (pw.length < 8) { setMsg('recover-msg', 'パスワードは8文字以上にしてください'); return; }
       $('recover-save').disabled = true;
       try {
         const { data, error } = await sb.auth.updateUser({ password: pw });

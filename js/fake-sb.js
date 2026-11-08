@@ -1,11 +1,11 @@
 // tests/e2e/fake-sb.js — supabase-js と同じ呼び方の小さい偽物（本物には一切つながない）。E2E とお試し版（dist-demo）で js/supabase.js の代わりに読む。
-// 保存は localStorage 'gyosha-demo-v1'（表とログイン状態）と 'gyosha-demo-v1-files'（写真などのファイル。data URL）。公開PDF は blob URL（その場限り）。
+// 保存は localStorage 'gyosha-demo-v1'（表とログイン状態）と 'gyosha-demo-v1-files'（写真などのファイル。data URL）。
 // 真似るもの（supabase/migrations/001_init.sql と同じ決まり）:
 //   from(t).select/insert/update/delete + eq/neq/is/in/order/limit/single/maybeSingle（await できる）
 //   RLS: 自社（org_id）の行だけ。列 grant: 書ける列だけ（org_id・id・created_by などを送ると permission denied）。必須・文字数の一部
 //   auth: signInWithPassword（メールとパスワードが空でなければ通す）/ signOut / getSession / getUser / onAuthStateChange / resetPasswordForEmail（送らずに記録）/ updateUser
-//   storage.from(b).upload / getPublicUrl / createSignedUrl / remove（1段目のフォルダ = 自社）
-//   rpc: my_org_id / estimate_next_number / estimate_issue
+//   ファイル置き場（本物は Cloudflare R2）: window.__fake.store.put / get / del（1段目のフォルダ = 自社）。呼ぶのは tests/e2e/fake-files.js（js/files.js の代わり）
+//   rpc: my_org_id / estimate_next_number / estimate_issue / org_file_bytes / all_file_bytes
 // 最初のデータ: 会社1つ・利用者1人・案件0件。テストからは window.__fake で中を見る。
 (function () {
   'use strict';
@@ -15,7 +15,7 @@
   const now = () => new Date().toISOString();
   const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, () => (Math.random() * 16 | 0).toString(16)));
   const copy = v => (v == null ? v : JSON.parse(JSON.stringify(v)));
-  const TABLES = ['orgs', 'memberships', 'clients', 'cases', 'reports', 'estimates', 'notices', 'drawings', 'doc_shares', 'estimate_templates', 'estimate_presets', 'rate_master', 'daily_reports', 'teikei_rates'];
+  const TABLES = ['orgs', 'memberships', 'clients', 'cases', 'reports', 'estimates', 'notices', 'drawings', 'doc_shares', 'estimate_templates', 'estimate_presets', 'rate_master', 'daily_reports', 'teikei_rates', 'files'];
 
   function seed() {
     const t = now();
@@ -35,7 +35,6 @@
   }
   let db = load();
   let files = (() => { try { return JSON.parse(localStorage.getItem(FKEY) || '{}') || {}; } catch (e) { return {}; } })();
-  const blobs = {}; // public-pdfs: path → blob URL
   const FULL = 'お試し版の保存場所がいっぱいです。写真を減らすか、設定の「お試しデータを最初に戻す」で消してください';
   function persist() { localStorage.setItem(KEY, JSON.stringify(db)); }
 
@@ -51,12 +50,13 @@
     estimates: { insert: ['case_id', 'series_id', 'version', 'number', 'kind', 'data'], update: ['data', 'status', 'number'], del: true },
     notices: { insert: ['case_id', 'data'], update: ['data'], del: true },
     drawings: { insert: ['case_id', 'image_path', 'marks'], update: ['image_path', 'marks'], del: true },
-    doc_shares: { insert: ['case_id', 'doc_type', 'doc_id', 'via', 'pdf_path'], update: ['undone_at'] },
+    doc_shares: { insert: ['case_id', 'doc_type', 'doc_id', 'via'], update: ['undone_at'] },
     estimate_templates: { insert: ['owner_user_id', 'name', 'lines', 'sort'], update: ['name', 'lines', 'sort'], del: true },
     estimate_presets: { insert: ['owner_user_id', 'text', 'unit', 'price', 'sort'], update: ['text', 'unit', 'price', 'sort'], del: true },
     rate_master: { insert: RATE_COLS, update: RATE_COLS, del: true },
     daily_reports: { insert: ['date', 'author', 'sites', 'notes'], update: ['date', 'author', 'sites', 'notes'], del: true },
-    teikei_rates: { insert: ['data'], update: ['data'], del: true }
+    teikei_rates: { insert: ['data'], update: ['data'], del: true },
+    files: { insert: ['path', 'bytes', 'kind'], del: true }
   };
   const DEFAULTS = {
     clients: { contact: '', email: '' },
@@ -65,14 +65,14 @@
     estimates: { version: 1, number: '', status: 'draft', kind: 'normal', data: {} },
     notices: { data: {} },
     drawings: { image_path: null, marks: [] },
-    doc_shares: { pdf_path: null, undone_at: null },
+    doc_shares: { undone_at: null },
     estimate_templates: { owner_user_id: null, lines: [], sort: 0 },
     estimate_presets: { owner_user_id: null, unit: '', price: 0, sort: 0 },
     rate_master: { client: '', vendor: '', property: '', unit: '', quantity: 1, source: '', date: null },
     daily_reports: { author: '', sites: [], notes: '' },
     teikei_rates: { data: {} }
   };
-  const HAS_CREATED_BY = ['cases', 'reports', 'estimates', 'notices', 'drawings', 'daily_reports'];
+  const HAS_CREATED_BY = ['cases', 'reports', 'estimates', 'notices', 'drawings', 'daily_reports', 'files'];
   const HAS_UPDATED_AT = ['cases', 'reports', 'estimates', 'notices', 'drawings', 'daily_reports', 'teikei_rates'];
   const CASE_CHILD = ['reports', 'estimates', 'notices', 'drawings', 'doc_shares'];
   const err = (message, code) => ({ message, code: code || 'P0001' });
@@ -100,6 +100,8 @@
     if (t === 'doc_shares' && (!['report', 'estimate', 'notice', 'drawing', 'daily'].includes(r.doc_type) || !['share', 'mail', 'line', 'download'].includes(r.via))) return err('check constraint', '23514');
     if (t === 'daily_reports' && (!/^\d{4}-\d{2}-\d{2}$/.test(String(r.date || '')) || len('author', 60) || len('notes', 4000) || !Array.isArray(r.sites))) return err('check constraint', '23514');
     if (t === 'rate_master' && (!['cost', 'sell'].includes(r.kind) || !String(r.description || '').trim() || !r.key || !(Number(r.unit_price) > 0))) return err('check constraint', '23514');
+    if (t === 'files' && (!['photo', 'drawing', 'logo', 'seal'].includes(r.kind) || !(Number.isInteger(r.bytes) && r.bytes >= 0) || !r.path || len('path', 300) || String(r.path).split('/')[0] !== r.org_id)) return err('check constraint', '23514');
+    if (t === 'files' && db.files.some(x => x.id !== r.id && x.path === r.path)) return err('duplicate key value violates unique constraint', '23505');
     if (t === 'orgs' && r.registration_number && !/^T[0-9]{13}$/.test(r.registration_number)) return err('new row for relation "orgs" violates check constraint', '23514');
     return null;
   }
@@ -230,45 +232,37 @@
     return { data: { session: sessionObj(), user: copy(db.session.user) }, error: null };
   }
 
-  /* ===== storage ===== */
+  /* ===== ファイル置き場（本物は R2。tests/e2e/fake-files.js から呼ぶ） ===== */
   const toDataUrl = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error('ファイルを読めませんでした')); r.readAsDataURL(b); });
-  function bucket(name) {
-    const own = p => myOrg() && String(p).split('/')[0] === myOrg();
-    const pub = name === 'public-pdfs';
-    return {
-      async upload(path, body, o) {
-        await wait();
-        if (!own(path)) return { data: null, error: err('new row violates row-level security policy', '42501') };
-        const k = name + '/' + path;
-        if ((pub ? blobs[k] : files[k]) && !(o && o.upsert)) return { data: null, error: err('The resource already exists', '409') };
-        if (pub) { blobs[k] = URL.createObjectURL(body); return { data: { path }, error: null }; }
-        const url = await toDataUrl(body);
-        const prev = files[k];
-        files[k] = url;
-        try { localStorage.setItem(FKEY, JSON.stringify(files)); }
-        catch (e) { if (prev) files[k] = prev; else delete files[k]; return { data: null, error: err(FULL) }; }
-        return { data: { path }, error: null };
-      },
-      getPublicUrl(path) { return { data: { publicUrl: pub ? (blobs[name + '/' + path] || '') : '' } }; },
-      async createSignedUrl(path) {
-        await wait();
-        const u = files[name + '/' + path];
-        if (!own(path) || !u) return { data: null, error: err('Object not found', '404') };
-        return { data: { signedUrl: u }, error: null };
-      },
-      async remove(paths) {
-        await wait();
-        (paths || []).filter(own).forEach(p => { delete files[name + '/' + p]; delete blobs[name + '/' + p]; });
-        try { localStorage.setItem(FKEY, JSON.stringify(files)); } catch (e) { /* 減らす方なので失敗しない */ }
-        return { data: [], error: null };
-      }
-    };
-  }
+  const own = p => myOrg() && String(p).split('/')[0] === myOrg();
+  const store = {
+    async put(path, body) {
+      await wait();
+      if (!own(path)) throw new Error('この会社のファイルではありません');
+      const url = await toDataUrl(body);
+      const prev = files[path];
+      files[path] = url;
+      try { localStorage.setItem(FKEY, JSON.stringify(files)); }
+      catch (e) { if (prev) files[path] = prev; else delete files[path]; throw new Error(FULL); }
+    },
+    async get(path) {
+      await wait();
+      if (!own(path) || !files[path]) throw new Error('ファイルが見つかりません');
+      return files[path];
+    },
+    async del(path) {
+      await wait();
+      if (own(path)) delete files[path];
+      try { localStorage.setItem(FKEY, JSON.stringify(files)); } catch (e) { /* 減らす方なので失敗しない */ }
+    }
+  };
 
   async function rpc(fn, args) {
     await wait();
     if (!me() || !myOrg()) return { data: null, error: denied() };
     if (fn === 'my_org_id') return { data: myOrg(), error: null };
+    if (fn === 'all_file_bytes') return { data: db.files.reduce((n, x) => n + x.bytes, 0), error: null };
+    if (fn === 'org_file_bytes') return { data: db.files.filter(x => x.org_id === myOrg()).reduce((n, x) => n + x.bytes, 0), error: null };
     if (fn === 'estimate_next_number') {
       const o = db.orgs.find(x => x.id === myOrg());
       o.estimate_seq++;
@@ -291,9 +285,10 @@
     ORG, USER, resetMails: [], pwUpdates: 0,
     get db() { return db; },
     get files() { return files; },
+    store,
     signInDemo() { return signIn(''); },
     reset() { db = seed(); files = {}; localStorage.removeItem(KEY); localStorage.removeItem(FKEY); }
   };
   window.__fake = fake;
-  window.sb = { from: t => new Query(t), auth, storage: { from: bucket }, rpc };
+  window.sb = { from: t => new Query(t), auth, rpc };
 })();

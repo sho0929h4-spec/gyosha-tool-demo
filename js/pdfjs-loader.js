@@ -1,6 +1,7 @@
 // js/pdfjs-loader.js — 重いライブラリを押したときに初めて読む（<script> を足す）。版は固定（jsdelivr）
 //   loadPdfJs() → Promise<pdfjsLib>（仕入見積の PDF・段階④の図面で使う）／ loadXlsx() → Promise<XLSX>（仕入見積の Excel）／ loadTesseract() → Promise<Tesseract>（写真の文字認識）
 //   SheetJS は約900KB あるので、ページを開くたびには読まない
+//   改ざん検知（integrity）は付けない: 本体から worker・wasm・辞書・cmaps をさらに読み、そちらには integrity を付けられないため。版を固定して、CSP で取りに行ける先を jsdelivr と tessdata に限る
 (function () {
   const PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/';
   const XLSX_URL = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';

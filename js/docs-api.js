@@ -21,18 +21,9 @@ const DocsApi = (() => {
       if (s.via === 'download') return 'ダウンロード済み';
       return '送付済み ' + CaseLogic.mdhm(s.sent_at) + '（' + (VIA[s.via] || s.via) + '）';
     },
-    record: async (caseId, type, id, via, pdfPath) => ok(await sb.from('doc_shares').insert({ case_id: caseId, doc_type: type, doc_id: id, via, pdf_path: pdfPath || null }).select().single()),
+    record: async (caseId, type, id, via) => ok(await sb.from('doc_shares').insert({ case_id: caseId, doc_type: type, doc_id: id, via }).select().single()),
     // 送っていないに戻す（その書類の今効いている記録を全部外す。ダウンロードの記録も）
     undoAll: async (type, id) => ok(await sb.from('doc_shares').update({ undone_at: new Date().toISOString() }).eq('doc_type', type).eq('doc_id', id).is('undone_at', null)),
-    // 公開PDF（public-pdfs/{org}/{推測できない uuid}/{type}.pdf）を置いて URL を返す（Storage のキーは英数字だけにする）
-    async publicPdf(type, blob) {
-      const path = ctx.org.id + '/' + newId() + '/' + type + '.pdf';
-      const up = await sb.storage.from('public-pdfs').upload(path, blob, { contentType: 'application/pdf' });
-      if (up.error) throw up.error;
-      const url = sb.storage.from('public-pdfs').getPublicUrl(path).data.publicUrl;
-      if (!url) throw new Error('PDFのリンクを作れませんでした');
-      return { path, url };
-    },
     // 書類の名前（案件画面の一覧・プレビュー・共有の文面）。見積書は「見積書 EST-… 第N版」、番号がまだなら「見積書（下書き）」（定型見積は「定型見積書 …」）。工事掲示は「工事掲示 302号室」、図面は「図面」
     title: (type, row) => (type === 'report' ? ReportLogic.docLabel(row.work_type, row.data)
       : type === 'estimate' && row.kind === 'teikei' ? TeikeiLogic.docLabel(row)

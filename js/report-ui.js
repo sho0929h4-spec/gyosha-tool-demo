@@ -313,10 +313,9 @@ const ReportUi = (() => {
       msg.className = 'msg';
       msg.textContent = '写真を保存中…（' + (k + 1) + '/' + files.length + '）';
       try {
-        const blob = await shrinkImage(files[k], 1500, 'image/jpeg', 0.72); // report-tool の compressImage と同じ 1500px・0.72
+        const blob = await shrinkImage(files[k], 1200, 'image/jpeg', 0.7); // 1200px・0.7（無料枠に収める。docs/notes/2026-11-08-production-roadmap.md）
         const path = ctx.org.id + '/reports/' + s.row.id + '/' + newId() + '.jpg';
-        const up = await sb.storage.from('photos').upload(path, blob, { contentType: 'image/jpeg' });
-        if (up.error) throw up.error;
+        await Files.upload(path, blob, 'image/jpeg', 'photo');
         if (st !== s) return;
         s.photos.push({ path, phase: '', caption: '', marks: [] });
         s.dirty = true;
@@ -335,7 +334,7 @@ const ReportUi = (() => {
     const [p] = st.photos.splice(i, 1);
     st.dirty = true;
     try { await saveNow(); } catch (e) { st.photos.splice(i, 0, p); renderPhotos(); toast('消せませんでした: ' + errText(e)); return; }
-    sb.storage.from('photos').remove([p.path]);
+    Files.remove(p.path);
     renderPhotos();
   }
   async function openMarks(i) {

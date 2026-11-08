@@ -91,7 +91,7 @@
     if (cls) img.className = cls;
     img.alt = alt || '';
     img.decoding = 'async';
-    if (/^https?:/i.test(src)) img.crossOrigin = 'anonymous'; // html2canvas useCORS 用（Supabase Storage は CORS 可）
+    if (/^https?:/i.test(src)) img.crossOrigin = 'anonymous'; // html2canvas useCORS 用（写真の置き場の Worker が Access-Control-Allow-Origin: * を返す）
     img.src = src;
     return img;
   }

@@ -2,7 +2,7 @@
 // ShareUi.open({ via: 'line'|'mail', type, docId, docLabel, caseRow, blob, fileName?, onRecorded })（fileName が無ければ ShareLogic.fileName。日報は caseRow が null）
 //   シート（× だけで閉じる）: 押した手段の文面（LINE = 短め・件名なし／メール = 件名＋本文。直せる）→
 //   ファイルを渡せる端末（navigator.canShare({ files })）: 「PDF と文面を共有する」= PDF ファイル＋文面を端末の共有へ・「文面をコピー」
-//   それ以外（パソコン）: メール =「メールを開く」（mailto: 件名＋本文＋公開PDF のリンク）／LINE =「文面とリンクをコピー」・「LINEで開く」
+//   それ以外（パソコン）: メール =「メールを開く」（mailto: 件名＋本文）／LINE =「文面をコピー」・「LINEで開く」。PDF はプレビューの「PDFをダウンロード」で落として添付（システムに PDF は残さない）
 //   共有したら doc_shares に記録（送付済み）。1回開いたシートで記録は1回
 const ShareUi = (() => {
   // テストで差し替える口（mailto を開く）
@@ -32,7 +32,7 @@ const ShareUi = (() => {
     const fname = o.fileName || ShareLogic.fileName(o.docLabel, o.caseRow);
     const m0 = ctx.membership || {};
     const m1 = ShareLogic.message({ type: o.type, docLabel: o.docLabel, caseRow: o.caseRow, org: ctx.org || {}, me: { name: m0.display_name, tel: m0.phone }, short: line });
-    const st = { file: new File([o.blob], fname, { type: 'application/pdf' }), url: '', pdfPath: null, sent: '', busy: false };
+    const st = { file: new File([o.blob], fname, { type: 'application/pdf' }), sent: '', busy: false };
 
     const bg = mk('div', 'modal-bg');
     bg.id = 'dsh-sheet';
@@ -80,14 +80,10 @@ const ShareUi = (() => {
     const okLine = t => mk('div', 'msg ok', t);
     async function record(via) {
       if (st.sent) return;
-      await DocsApi.record(o.caseRow ? o.caseRow.id : null, o.type, o.docId, via, st.pdfPath);
+      await DocsApi.record(o.caseRow ? o.caseRow.id : null, o.type, o.docId, via);
       st.sent = via;
       out.appendChild(okLine('送付済みにしました（' + ShareLogic.viaLabel(via) + '）'));
       if (o.onRecorded) o.onRecorded();
-    }
-    async function ensureLink() {
-      if (!st.url) { const p = await DocsApi.publicPdf(o.type, o.blob); st.url = p.url; st.pdfPath = p.path; }
-      return st.url;
     }
     const run = async (fn, what) => {
       if (st.busy) return;
@@ -115,25 +111,23 @@ const ShareUi = (() => {
       out.replaceChildren(ok ? okLine('文面をコピーしました。送り先のアプリに貼り付けてください') : mk('div', 'msg err', 'コピーできませんでした。本文を選んでコピーしてください'));
     }, 'コピーできませんでした');
     const sendMail = () => run(async () => {
-      const url = await ensureLink();
       const m = cur();
-      const built = ShareLogic.buildMailto({ to: (o.caseRow && o.caseRow.client_email) || '', subject: m.subject, body: m.body, link: o.docLabel + 'PDF: ' + url });
-      out.replaceChildren(okLine('メールアプリを開きました。送信してください' + (built.shortened ? '（本文が長いため短くしています）' : '')));
+      const built = ShareLogic.buildMailto({ to: (o.caseRow && o.caseRow.client_email) || '', subject: m.subject, body: m.body });
+      out.replaceChildren(okLine('メールアプリを開きました。PDF はダウンロードして添付してください' + (built.shortened ? '（本文が長いため短くしています）' : '')));
       api.openUrl(built.url);
       await record('mail');
     }, 'メールを開けませんでした');
     const sendLine = () => run(async () => {
-      const url = await ensureLink();
-      const text = ShareLogic.withLink(cur().body, o.docLabel + 'PDF: ' + url);
+      const text = cur().body;
       const ok = await copyText(text);
-      const kids = [ok ? okLine('文面と PDF のリンクをコピーしました。LINE に貼り付けてください') : mk('div', 'msg err', 'コピーできませんでした。下の文面を選んでコピーし、LINE に貼り付けてください')];
+      const kids = [ok ? okLine('文面をコピーしました。LINE に貼り付けてください') : mk('div', 'msg err', 'コピーできませんでした。下の文面を選んでコピーし、LINE に貼り付けてください')];
       if (!ok) { const t = document.createElement('textarea'); t.readOnly = true; t.rows = 6; t.value = text; t.id = 'dsh-copybox'; kids.push(t); }
       const a = mk('a', 'btn ghost sm', 'LINEで開く');
       a.id = 'dsh-line-open';
       a.href = ShareLogic.lineUrl(text); // ユーザーが押したときだけ LINE に渡る
       a.target = '_blank';
       a.rel = 'noopener noreferrer';
-      kids.push(a);
+      kids.push(a, mk('div', 'hint', 'PDF はダウンロードして LINE に添付してください'));
       out.replaceChildren(...kids);
       await record('line');
     }, 'LINE 用の文面を用意できませんでした');
@@ -145,8 +139,8 @@ const ShareUi = (() => {
       note.textContent = 'PDF のファイルと本文をスマホの共有に渡します。出てきた一覧から' + (line ? 'LINE' : 'メール') + 'のアプリを選んでください。本文が入らないときは「文面をコピー」で貼り付けてください';
       acts.append(b('PDF と文面を共有する', 'dsh-share', share, 'btn'), b('文面をコピー', 'dsh-copy', copyBody, 'btn ghost sm'));
     } else {
-      note.textContent = '送るときに PDF のリンク（URL を知っている人だけが開けます）を本文に入れます';
-      acts.append(line ? b('文面とリンクをコピー（LINE に貼り付け）', 'dsh-line', sendLine, 'btn') : b('メールを開く', 'dsh-mail', sendMail, 'btn'));
+      note.textContent = 'PDF はダウンロードして添付してください（プレビューの「PDFをダウンロード」）';
+      acts.append(line ? b('文面をコピー（LINE に貼り付け）', 'dsh-line', sendLine, 'btn') : b('メールを開く', 'dsh-mail', sendMail, 'btn'));
     }
     (acts.querySelector('button') || x).focus({ preventScroll: true });
   }
