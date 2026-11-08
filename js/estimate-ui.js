@@ -352,8 +352,8 @@ const EstimateUi = (() => {
       render();
       changed();
     };
-    p.appendChild(dBtn('現場管理費 ¥18,000／日', 'btn ghost sm', () => put(EL.quickAdd('genba'))));
-    p.appendChild(dBtn('交通費 ¥6,000／台', 'btn ghost sm', () => put(EL.quickAdd('kotsu'))));
+    p.appendChild(dBtn('現場管理費／日', 'btn ghost sm', () => put(EL.quickAdd('genba'))));
+    p.appendChild(dBtn('交通費／台', 'btn ghost sm', () => put(EL.quickAdd('kotsu'))));
     const sk = mk('div', 'opt-row');
     const pct = ctl('input', 'es-shokehi-pct', 'number', st.shokehiPct, { min: 0, max: 100, step: 1, inputMode: 'numeric' }, v => { st.shokehiPct = v; });
     pct.setAttribute('aria-label', '諸経費の%');

@@ -62,8 +62,8 @@
       return Object.assign({}, r, { unit_price: up, amount: round(num(r.quantity) * up) });
     }));
   }
-  // よく使う明細（元のクイック追加）: 現場管理費 1日 18,000／交通費 1台 6,000／諸経費 合計×pct の自動行
-  const QUICK = { genba: ['現場管理費', '日', 18000], kotsu: ['交通費', '台', 6000] };
+  // よく使う明細（元のクイック追加）: 現場管理費 1日／交通費 1台（単価は入れない＝0。ユーザー決定 2026-11-08）／諸経費 合計×pct の自動行
+  const QUICK = { genba: ['現場管理費', '日', 0], kotsu: ['交通費', '台', 0] };
   function quickAdd(kind, pct) {
     if (kind === 'shokehi') return Object.assign(emptyRow(), { description: '諸経費', auto: 'shokehi', pct: num(pct) });
     const q = QUICK[kind];
