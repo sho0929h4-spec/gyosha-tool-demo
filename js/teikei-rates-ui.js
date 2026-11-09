@@ -106,7 +106,37 @@ const TeikeiRatesUi = (() => {
       msg('標準の単価表に戻しました', true);
     });
     reset.id = 'tr-reset';
-    body.append(add, reset);
+    // 単価表をファイル（JSON）で出し入れ。自社の単価表や他の会社から受け取った表を入れる。読み込んだら「保存」でこの会社の単価表になる
+    const file = document.createElement('input');
+    file.type = 'file';
+    file.accept = '.json,application/json';
+    file.id = 'tr-file';
+    file.hidden = true;
+    file.addEventListener('change', async () => {
+      const f = file.files && file.files[0];
+      file.value = '';
+      if (!f) return;
+      const r = TL.parseRates(await f.text());
+      if (r.error) { msg('読み込めませんでした: ' + r.error); return; }
+      draft = r.data;
+      dirty = true;
+      await showList();
+      msg('ファイルを読み込みました（' + TL.sets(draft).length + 'セット）。「保存」を押すとこの会社の単価表になります', true);
+    });
+    const imp = dBtn('ファイルから読み込む', 'btn ghost sm', () => file.click());
+    imp.id = 'tr-import';
+    const exp = dBtn('ファイルに書き出す', 'btn ghost sm', () => {
+      const out = { version: draft.version || '', sets: draft.sets };
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 1)], { type: 'application/json' }));
+      a.download = '定型見積の単価表_' + EstimateLogic.ymd(new Date()) + '.json';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+    exp.id = 'tr-export';
+    const io = mk('div', 'grid2');
+    io.append(imp, exp);
+    body.append(add, io, file, reset);
   }
 
   /* ---------- 1つのセット ---------- */

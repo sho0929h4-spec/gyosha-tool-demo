@@ -242,7 +242,24 @@
   const fileName = c => { const n = str(c && c.name).trim(); return safe(n ? `【被害復旧工事見積書】${n}${roomText(c.room)}` : '被害復旧工事費 見積書') + '.pdf'; };
   const docLabel = row => (row && row.number ? '定型見積書 ' + row.number + ' 第' + row.version + '版' : '定型見積書（下書き）');
 
-  const api = { numOr, sets, keihiSet, masterSet, partsOf, setDefaultTotal, roomText, autoTitle, autoEnd, syncCover, lineFrom, addSet, removeGroup, addFreeSet, addFreeLine,
+  // ファイル（JSON）から単価表を読む（設定の「ファイルから読み込む」）。形が違えば error（日本語）。version と sets だけを残す
+  function parseRates(text) {
+    let r;
+    try { r = JSON.parse(str(text)); } catch (e) { return { error: 'JSON として読めません' }; }
+    if (!r || typeof r !== 'object' || !Array.isArray(r.sets)) return { error: '単価表の形ではありません（sets がありません）' };
+    for (const s of r.sets) {
+      if (!s || typeof s !== 'object' || !str(s.id).trim() || !Array.isArray(s.items)) return { error: 'セットに id か items がありません' };
+      for (const it of s.items) {
+        if (!it || typeof it !== 'object' || (it.price != null && !(Number.isFinite(Number(it.price)) && Number(it.price) >= 0))) return { error: '単価が数でない行があります（' + (s.work || s.id) + '）' };
+      }
+    }
+    if (!keihiSet(r)) return { error: '一般管理費（共通費）のセットがありません' };
+    const ids = r.sets.map(s => s.id);
+    if (new Set(ids).size !== ids.length) return { error: '同じ id のセットが2つあります' };
+    return { data: { version: str(r.version), sets: r.sets } };
+  }
+
+  const api = { numOr, sets, keihiSet, parseRates, masterSet, partsOf, setDefaultTotal, roomText, autoTitle, autoEnd, syncCover, lineFrom, addSet, removeGroup, addFreeSet, addFreeLine,
     removeLine, moveGroup, setLine, setGroup, setRate, floor1On, setFloor1, lineEdited, resetLines, initKeihi, presetVals, applyPreset, autoPresetKey, keihiEdited, syncPreset,
     setKeihi, resetKeihi, setDays, newData, totals, pages, validate, fileName, docLabel };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
