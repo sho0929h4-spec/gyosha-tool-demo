@@ -1,5 +1,6 @@
 // js/settings-ui.js — 05 設定: 会社（名前・住所・電話・メール・登録番号・ロゴ・社印・報告書に会社名とロゴを出す）／自分（名前・電話・パスワード変更）
-//   見積書（消費税率・定型テンプレートの一覧と削除・よく使う明細の追加と削除・単価マスタの一覧と削除）。元請の一覧・メンバー招待は「準備中」
+//   見積書（消費税率・定型テンプレートの一覧と削除・よく使う明細の追加と削除・単価マスタの一覧と削除）。元請の一覧は「準備中」
+//   一般（ctx.membership.role が admin でない）には会社・消費税率を読むだけにする。管理者にはメンバー・操作の記録（js/members-ui.js）
 const SettingsUi = (() => {
   let wired = false;
   const ok = r => { if (r.error) throw r.error; return r.data; };
@@ -174,9 +175,18 @@ const SettingsUi = (() => {
       finally { $('sm-pw-save').disabled = false; }
     });
   }
-  function show() {
+  async function show() {
     wire();
+    if (!(await App.refreshRole())) return;
     showScreen('settings');
+    const admin = ctx.membership.role === 'admin';
+    $('set-org-open').hidden = !admin;
+    $('set-org-ro').hidden = admin;
+    if (!admin) { $('set-org-form').hidden = true; $('set-org-open').setAttribute('aria-expanded', 'false'); }
+    $('se-tax').disabled = !admin;
+    $('se-tax-save').hidden = !admin;
+    $('se-tax-ro').hidden = admin;
+    MembersUi.show(admin);
     ['so-msg', 'sm-msg', 'sm-pw-msg', 'se-tax-msg', 'se-msg', 'se-rate-msg'].forEach(id => setMsg(id, ''));
     $('se-tax').value = Math.round(Number(ctx.org.tax_rate || 0) * 1000) / 10;
     renderEst();
@@ -188,16 +198,17 @@ const SettingsUi = (() => {
     $('sm-pw').value = '';
     renderImg('so-logo', 'logo_path', 'ロゴ');
     renderImg('so-seal', 'seal_path', '社印');
-    renderUsage();
+    renderUsage(admin);
   }
-  // 写真・図面の容量（8GB を超えたら赤で。9GB で置けなくなる）
-  async function renderUsage() {
+  // 写真・図面の容量（会社の上限 orgs.file_limit_bytes の 8/9 を超えたら赤で。上限で置けなくなる）
+  async function renderUsage(admin) {
     const e = $('set-files-use');
     e.className = 'msg';
     e.textContent = '確かめています…';
     try {
       const n = await Files.usage();
-      e.textContent = (n / 1024 ** 2).toFixed(1) + 'MB ／ 10GB' + (n > Files.WARN ? '　もうすぐいっぱいです。相談してください' : '');
+      const L = Files.LIMIT, lim = L < 1024 ** 3 ? Math.round(L / 1024 ** 2) + 'MB' : Math.round(L / 1024 ** 3 * 10) / 10 + 'GB';
+      e.textContent = (n / 1024 ** 2).toFixed(1) + 'MB／上限 ' + lim + '（この会社）' + (n > Files.WARN ? '　もうすぐいっぱいです。' + (admin ? '運営' : '管理者') + 'に相談してください' : '');
       e.classList.toggle('err', n > Files.WARN);
     } catch (x) { e.className = 'msg err'; e.textContent = '容量を確かめられませんでした: ' + errText(x); }
   }

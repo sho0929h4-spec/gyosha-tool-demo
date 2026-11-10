@@ -2,6 +2,7 @@
 //   直した分は保存するまで画面の中だけ（自動保存はしない）。「保存する」で TeikeiApi.saveRates。保存しないで設定の外へ出るときは確かめる
 //   単価表の変更は、このあとに作る定型見積から効く（作った見積は data に自分の単価を持っている）
 //   一般管理費（共通費）のセットは 行＋プリセットの係数だけ直せる（auto・day_linked はそのまま）。セットの options（養生率・1階）もそのまま
+//   一般（管理者でない人）は読むだけ: 入力は disabled、保存・足す・消す・読み込む・標準に戻すは出さない（書き出すは出す）。本当の壁は DB の policy
 const TeikeiRatesUi = (() => {
   const TL = TeikeiLogic;
   let draft = null, dirty = false, wired = false;
@@ -9,6 +10,8 @@ const TeikeiRatesUi = (() => {
   const vs = v => (v == null ? '' : String(v));
   const touch = () => { dirty = true; $('tr-sub').textContent = '保存していない変更があります'; };
   const setHref = id => '#settings/teikei/' + encodeURIComponent(id);
+  const ro = () => ctx.membership.role !== 'admin';
+  const RO_TEXT = '単価表は管理者が直せます（見るだけ・書き出すだけできます）';
 
   async function load() {
     if (draft && dirty) return; // 直している途中は画面の中のものを使う。それ以外は毎回読み直す
@@ -53,24 +56,27 @@ const TeikeiRatesUi = (() => {
   }
   async function open(title, back) {
     wire();
+    if (!(await App.refreshRole())) return false;
     $('tr-title').textContent = title;
     $('tr-back').href = back;
     $('tr-body').replaceChildren();
+    $('tr-save').parentElement.hidden = ro();
     showScreen('tkrates');
     await load();
     $('tr-sub').textContent = dirty ? '保存していない変更があります' : draft.isDefault ? '標準の単価表' : '会社の単価表';
+    return true;
   }
   const card = title => { const c = mk('div', 'card'); if (title) c.appendChild(mk('div', 'card-t', title)); return c; };
   const msgBox = () => { const m = mk('div', 'msg'); m.id = 'tr-msg'; m.setAttribute('role', 'status'); return m; };
 
   /* ---------- 一覧 ---------- */
   async function showList() {
-    await open('定型見積の単価表', '#settings');
+    if (!(await open('定型見積の単価表', '#settings'))) return;
     const body = $('tr-body');
     const top = card();
     const now = mk('div', 'hint', draft.isDefault ? '標準の単価表を使っています。直して保存すると、この会社の単価表になります。' : 'この会社の単価表を使っています。');
     now.id = 'tr-now';
-    top.append(now, mk('div', 'hint', '直した単価は、このあとに作る定型見積から使います（作った見積の中身は変わりません）。'));
+    top.append(now, mk('div', 'hint', ro() ? RO_TEXT : '直した単価は、このあとに作る定型見積から使います（作った見積の中身は変わりません）。'));
     top.appendChild(msgBox());
     body.appendChild(top);
     const link = (s, text, sub) => {
@@ -116,6 +122,7 @@ const TeikeiRatesUi = (() => {
       const f = file.files && file.files[0];
       file.value = '';
       if (!f) return;
+      if (f.size > 300 * 1024) { msg('読み込めませんでした: ファイルが大きすぎます（300KB まで）'); return; } // 大きいファイルは読む前に止める（parseRates と同じ上限）
       const r = TL.parseRates(await f.text());
       if (r.error) { msg('読み込めませんでした: ' + r.error); return; }
       draft = r.data;
@@ -134,6 +141,7 @@ const TeikeiRatesUi = (() => {
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     });
     exp.id = 'tr-export';
+    if (ro()) { body.appendChild(exp); return; }
     const io = mk('div', 'grid2');
     io.append(imp, exp);
     body.append(add, io, file, reset);
@@ -154,7 +162,7 @@ const TeikeiRatesUi = (() => {
   const num = (v, d) => TL.numOr(v, d);
 
   async function showSet(setId) {
-    await open('単価表のセット', '#settings/teikei');
+    if (!(await open('単価表のセット', '#settings/teikei'))) return;
     const s = TL.masterSet(draft, setId);
     if (!s) { toast('セットが見つかりませんでした'); location.replace('#settings/teikei'); return; }
     const keihi = s.category === '共通費';
@@ -239,6 +247,11 @@ const TeikeiRatesUi = (() => {
       });
       del.id = 'tr-del-set';
       body.appendChild(del);
+    }
+    if (ro()) {
+      head.insertBefore(mk('div', 'hint', RO_TEXT), head.firstChild.nextSibling);
+      body.querySelectorAll('input, #tr-cat button').forEach(e => { e.disabled = true; });
+      body.querySelectorAll('#tr-add-line, [id^="tr-del-"]').forEach(e => e.remove());
     }
   }
   return { showList, showSet };

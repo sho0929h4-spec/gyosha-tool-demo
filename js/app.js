@@ -20,6 +20,9 @@ function dBtn(text, cls, onClick) {
 function errText(e) {
   const m = e && e.message ? e.message : String(e || '');
   if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return '通信できませんでした。電波の良い所でもう一度お試しください';
+  // 権限で断られた（使っている間に一般にされた・policy で 0 件になり single が失敗）か、開いた行がもう無い（single が 0 件）。英語のまま出さない
+  if (e && (e.code === '42501' || e.code === 'PGRST116')) return 'この操作はできませんでした。管理者だけができる操作か、対象がもう消されています。画面を開き直してください';
+  if (/row-level security/i.test(m)) return 'この操作はできませんでした。管理者だけができる操作か、対象がもう消されています。画面を開き直してください';
   return m || '理由が分かりませんでした';
 }
 function showScreen(id) {
@@ -139,10 +142,13 @@ const App = (() => {
   const leaveHooks = []; // 画面を離れる前（報告書の保存待ちなど）
   const onLeave = fn => leaveHooks.push(fn);
 
+  // 所属が無い人（招待されていない・外された）はログインしたまま「メンバーではありません」の画面だけ（noMember）
+  let noMember = false;
   async function loadCtx(user) {
     const m = await sb.from('memberships').select('*').eq('user_id', user.id).maybeSingle();
     if (m.error) throw m.error;
-    if (!m.data) throw new Error('このアカウントはどの会社にも入っていません。招待した人に確かめてください');
+    noMember = !m.data;
+    if (noMember) { ctx = null; return; }
     const o = await sb.from('orgs').select('*').eq('id', m.data.org_id).single();
     if (o.error) throw o.error;
     ctx = { user, membership: m.data, org: o.data };
@@ -153,6 +159,7 @@ const App = (() => {
     routing = routing.then(async () => {
       for (const fn of leaveHooks) { try { await fn(); } catch (e) { console.warn(e); } }
       const h = location.hash || '#cases';
+      if (noMember) { AuthUi.noMember(); return; }
       if (!ctx && h !== '#login') { location.replace('#login'); return; }
       if (ctx && h === '#login') { location.replace('#cases'); return; }
       for (const [re, fn] of ROUTES) {
@@ -176,7 +183,7 @@ const App = (() => {
   async function start() {
     renderTabs();
     sb.auth.onAuthStateChange((ev, session) => {
-      if (ev === 'SIGNED_OUT') { ctx = null; location.hash = '#login'; }
+      if (ev === 'SIGNED_OUT') { ctx = null; noMember = false; if (location.hash === '#login') route(); else location.hash = '#login'; }
       // 再設定メールのリンク・招待メールのリンク（js/supabase.js の SB_INVITE）から開いたら、パスワードを決める画面
       if (ev === 'PASSWORD_RECOVERY' || (ev === 'SIGNED_IN' && window.SB_INVITE)) { window.SB_INVITE = false; recovering = true; AuthUi.recovery(); }
     });
@@ -194,12 +201,20 @@ const App = (() => {
     if (recovering) return; // パスワードを決める画面のまま（route すると案件の画面に替わってしまう）。決めたら AuthUi が signedIn を呼ぶ
     route();
   }
+  // 役割を DB から引き直す（設定・単価表を開くとき。使っている間に権限が変わっても古いままにしない）。所属が無ければ「メンバーではありません」へ → false
+  async function refreshRole() {
+    const m = await sb.from('memberships').select('*').eq('user_id', ctx.user.id).maybeSingle();
+    if (m.error) { console.warn(m.error); return true; } // 引けないときは今の役割のまま（本当の壁は DB）
+    if (!m.data) { noMember = true; ctx = null; AuthUi.noMember(); return false; }
+    ctx.membership = m.data;
+    return true;
+  }
   // 設定で会社・自分を直したとき
   function setCtx(part, row) {
     ctx[part] = row;
     document.querySelectorAll('.js-org-name').forEach(e => { e.textContent = ctx.org.name || ''; });
   }
-  return { start, route, signedIn, onLeave, setCtx };
+  return { start, route, signedIn, onLeave, setCtx, refreshRole };
 })();
 
 // 画像を縮めて Blob にする（長辺 maxEdge px まで。type は 'image/jpeg' か 'image/png'）。読めない画像は理由付きで失敗

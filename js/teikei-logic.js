@@ -243,20 +243,42 @@
   const docLabel = row => (row && row.number ? '定型見積書 ' + row.number + ' 第' + row.version + '版' : '定型見積書（下書き）');
 
   // ファイル（JSON）から単価表を読む（設定の「ファイルから読み込む」）。形が違えば error（日本語）。version と sets だけを残す
+  // ファイルの単価表は知っている欄だけを写す（余計な欄は捨てる・型が違えば error）。checker は値を返すか、理由の文で throw
+  const bad = m => { throw new Error(m); };
+  const typed = (type, k) => v => (typeof v === type && (type !== 'number' || Number.isFinite(v)) ? v : bad('「' + k + '」の形が違う所があります'));
+  const listOf = (f, k) => v => (Array.isArray(v) ? v.map(f) : bad('「' + k + '」の形が違う所があります'));
+  const shape = (spec, k) => v => {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) bad('「' + k + '」の形が違う所があります');
+    const o = {};
+    Object.keys(spec).forEach(f => { if (v[f] !== undefined) o[f] = spec[f](v[f]); });
+    return o;
+  };
+  const S = k => typed('string', k), B = k => typed('boolean', k), Nm = k => typed('number', k);
+  const RATE_ITEM = shape({ name: S('name'), spec: S('spec'), qty: v => (v === null ? v : Nm('qty')(v)), unit: S('unit'),
+    price: v => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : bad('単価が数でない行があります')), qty_input: B('qty_input'), qty_days: B('qty_days'), day_linked: B('day_linked') }, 'items');
+  const RATE_SET = shape({ id: S('id'), category: S('category'), part: S('part'), work: S('work'), items: listOf(RATE_ITEM, 'items'),
+    options: shape({ default_add: B('default_add'), rate_label: S('rate_label'), rate_presets: listOf(Nm('rate_presets'), 'rate_presets'), rate_exempt: listOf(S('rate_exempt'), 'rate_exempt'),
+      floor1_label: S('floor1_label'), floor1_omit: listOf(S('floor1_omit'), 'floor1_omit') }, 'options'),
+    presets: listOf(shape({ label: S('label'), coef: Nm('coef'), key: S('key') }, 'presets'), 'presets'),
+    // 一般管理費の日数の行と、廊下・居室の自動の係数（teikei-logic の initKeihi・autoPresetKey が読む）
+    day_linked: listOf(S('day_linked'), 'day_linked'),
+    auto: shape({ corridor_parts: listOf(S('corridor_parts'), 'corridor_parts'), room_parts: listOf(S('room_parts'), 'room_parts'), otherwise: S('otherwise') }, 'auto') }, 'sets');
+  const RATES_MAX = 300 * 1024;
   function parseRates(text) {
+    text = str(text);
+    if (new TextEncoder().encode(text).length > RATES_MAX) return { error: 'ファイルが大きすぎます（300KB まで）' };
     let r;
-    try { r = JSON.parse(str(text)); } catch (e) { return { error: 'JSON として読めません' }; }
+    try { r = JSON.parse(text); } catch (e) { return { error: 'JSON として読めません' }; }
     if (!r || typeof r !== 'object' || !Array.isArray(r.sets)) return { error: '単価表の形ではありません（sets がありません）' };
+    const out = [];
     for (const s of r.sets) {
-      if (!s || typeof s !== 'object' || !str(s.id).trim() || !Array.isArray(s.items)) return { error: 'セットに id か items がありません' };
-      for (const it of s.items) {
-        if (!it || typeof it !== 'object' || (it.price != null && !(Number.isFinite(Number(it.price)) && Number(it.price) >= 0))) return { error: '単価が数でない行があります（' + (s.work || s.id) + '）' };
-      }
+      if (!s || typeof s !== 'object' || typeof s.id !== 'string' || !s.id.trim() || !Array.isArray(s.items)) return { error: 'セットに id か items がありません' };
+      try { out.push(RATE_SET(s)); } catch (e) { return { error: e.message + '（' + str(s.work || s.id) + '）' }; }
     }
-    if (!keihiSet(r)) return { error: '一般管理費（共通費）のセットがありません' };
-    const ids = r.sets.map(s => s.id);
+    if (!keihiSet({ sets: out })) return { error: '一般管理費（共通費）のセットがありません' };
+    const ids = out.map(s => s.id);
     if (new Set(ids).size !== ids.length) return { error: '同じ id のセットが2つあります' };
-    return { data: { version: str(r.version), sets: r.sets } };
+    return { data: { version: str(r.version), sets: out } };
   }
 
   const api = { numOr, sets, keihiSet, parseRates, masterSet, partsOf, setDefaultTotal, roomText, autoTitle, autoEnd, syncCover, lineFrom, addSet, removeGroup, addFreeSet, addFreeLine,

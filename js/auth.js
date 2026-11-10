@@ -1,4 +1,4 @@
-// js/auth.js — ログイン・ログアウト・パスワード再設定のメール（と、メールのリンクから戻ったときの新しいパスワード）
+// js/auth.js — ログイン・ログアウト・パスワード再設定のメール（と、メールのリンクから戻ったときの新しいパスワード）・所属の無い人の画面（ログアウトだけ）
 const AuthUi = (() => {
   let wired = false;
   const setMsg = (id, text, ok) => { const e = $(id); e.textContent = text || ''; e.classList.toggle('ok', !!ok); e.classList.toggle('err', !ok && !!text); };
@@ -58,6 +58,10 @@ const AuthUi = (() => {
         $('recover-save').disabled = false;
       }
     });
+    $('nm-logout').addEventListener('click', async () => {
+      const { error } = await sb.auth.signOut();
+      if (error) toast('ログアウトできませんでした: ' + errText(error));
+    });
     $('logout').addEventListener('click', async () => {
       if (!(await askPopup('ログアウトしますか？', { title: 'ログアウト', okLabel: 'ログアウト', id: 'logout-ask' }))) return;
       const { error } = await sb.auth.signOut();
@@ -68,5 +72,6 @@ const AuthUi = (() => {
   // 再設定メールのリンクから開いた（Supabase が PASSWORD_RECOVERY を知らせる）
   function recovery() { wire(); $('recover').hidden = false; showScreen('login'); $('recover-pw').focus(); }
   function error(text) { wire(); setMsg('login-msg', text); }
-  return { show, recovery, error };
+  function noMember() { wire(); showScreen('nomember'); }
+  return { show, recovery, error, noMember };
 })();

@@ -9,6 +9,7 @@ input[type=text], input[type=email], input[type=password], input[type=search], i
   width: 100%; min-width: 0; font-size: 16px; border: 1px solid #bbb; border-radius: 8px; background: #fff; }
 input[type=text], input[type=email], input[type=password], input[type=search], input[type=date], input[type=datetime-local], input[type=time], input[type=tel], input[type=number], select { height: 48px; padding: 0 12px; }
 textarea { padding: 10px 12px; resize: vertical; line-height: 1.6; }
+input:disabled, select:disabled, textarea:disabled { background: #f4f4f4; color: #555; }
 input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid #1e5bb8; outline-offset: 1px; }
 [hidden] { display: none !important; }
 
@@ -160,6 +161,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .set-li { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .set-li > span { flex-grow: 1; min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
 .set-li .btn { flex: none; }
+.mem-act { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.audit-li { display: flex; flex-direction: column; gap: 2px; font-size: 14px; overflow-wrap: anywhere; border-bottom: 1px solid #eee; padding-bottom: 6px; }
 /* 単価マスタ: 照合の札（07）・一覧（05） */
 .rc { border: 1px solid #ddd; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; overflow-wrap: anywhere; min-width: 0; }
 .rc.warn { border-color: #e3a3a3; background: #fff6f6; }
