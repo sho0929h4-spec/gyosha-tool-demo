@@ -9,8 +9,13 @@
 //   audit_log: orgs の update（変わった列・会社名／住所／登録番号は前後の値 changes）・招待（1時間 30 人まで。too_many）・teikei_rates の保存／標準に戻す・cases の delete・set_member_role で行が入る
 //   auth: signInWithPassword（メールとパスワードが空でなければ通す）/ signOut / getSession / getUser / onAuthStateChange / resetPasswordForEmail（送らずに記録）/ updateUser
 //   ファイル置き場（本物は Cloudflare R2）: window.__fake.store.put / get / del（1段目のフォルダ = 自社）。呼ぶのは tests/e2e/fake-files.js（js/files.js の代わり）
-//   rpc: my_org_id / is_admin / estimate_next_number / estimate_issue / org_file_bytes / org_members / set_member_role
+//   rpc: my_org_id / my_status / is_admin / estimate_next_number / estimate_issue / org_file_bytes / org_members / set_member_role
+//   利用を終えた会社（orgs.closed_at。本物と同じく利用者は直せない。テストは db を直接書く）: その会社の人は select 0 件・書けない・rpc は my_status だけ（'closed'）
 // 最初のデータ: 会社1つ・利用者1人（管理者）・案件0件。テストからは window.__fake で中を見る。
+// 招待・再設定メールのリンクの印（js/supabase.js と同じ行。試験 tests/link-flags.test.js が同じかを見る）
+const sbLink = h => { const p = new URLSearchParams(String(h || '').replace(/^#/, '')); return p.get('access_token') ? p.get('type') : null; };
+window.SB_INVITE = sbLink(location.hash) === 'invite';
+window.SB_RECOVERY = sbLink(location.hash) === 'recovery';
 (function () {
   'use strict';
   const KEY = 'gyosha-demo-v1', FKEY = KEY + '-files';
@@ -27,7 +32,7 @@
     const db = { session: null, users: [{ id: USER, email: 'demo@example.com' }] };
     TABLES.forEach(n => { db[n] = []; });
     db.orgs.push({ id: ORG, name: 'お試し工務店', address: '', tel: '', email: '', registration_number: '', logo_path: null, seal_path: null,
-      show_company_on_report: true, tax_rate: 0.1, estimate_seq: 0, file_limit_bytes: FILE_LIMIT, created_at: t });
+      show_company_on_report: true, tax_rate: 0.1, estimate_seq: 0, file_limit_bytes: FILE_LIMIT, closed_at: null, created_at: t });
     db.memberships.push({ user_id: USER, org_id: ORG, display_name: 'お試し担当', phone: '', role: 'admin', created_at: t });
     return db;
   }
@@ -93,7 +98,8 @@
   const denied = () => err('permission denied', '42501');
   const me = () => (db.session ? db.session.user.id : null);
   const myMem = () => db.memberships.find(x => x.user_id === me()) || null;
-  const myOrg = () => { const m = myMem(); return m ? m.org_id : null; };
+  const orgOpen = m => db.orgs.some(o => o.id === m.org_id && !o.closed_at);
+  const myOrg = () => { const m = myMem(); return m && orgOpen(m) ? m.org_id : null; }; // 本物の my_org_id と同じく利用を終えた会社は返さない
   const isAdmin = () => { const m = myMem(); return !!m && m.role === 'admin'; };
   const adminOnly = (t, op) => (ADMIN_ONLY[t] || []).includes(op) && !isAdmin();
   const visible = (t, r) => (t === 'orgs' ? r.id === myOrg() : r.org_id === myOrg())
@@ -357,6 +363,7 @@
 
   async function rpc(fn, args) {
     await wait();
+    if (fn === 'my_status' && me()) { const m = myMem(); return { data: !m ? 'none' : orgOpen(m) ? 'ok' : 'closed', error: null }; }
     if (!me() || !myOrg()) return { data: null, error: denied() };
     if (fn === 'my_org_id') return { data: myOrg(), error: null };
     if (fn === 'is_admin') return { data: isAdmin(), error: null };

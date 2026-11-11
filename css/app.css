@@ -324,3 +324,12 @@ input.tk-need { border-color: #b00; }
 .cal-ev.box.narrow .cal-ev-t, .cal-ev.box.narrow .cal-ev-tm { white-space: nowrap; overflow-wrap: normal; }
 .cal-now { position: absolute; left: -1px; right: 0; height: 0; border-top: 2px solid #b00; z-index: 3; pointer-events: none; }
 .cal-now::before { content: ""; position: absolute; left: -6px; top: -7px; width: 12px; height: 12px; border-radius: 50%; background: #b00; }
+
+/* 利用規約・プライバシーポリシーへのリンク（ログイン・設定の下）と、そのページ（legal/*.html。CSP のため inline の style を書かない） */
+.legal-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 20px; }
+.legal-links .textlink { text-decoration: underline; }
+.legal { overflow-wrap: anywhere; }
+.legal h1 { font-size: 20px; margin: 0; }
+.legal h2 { font-size: 16px; margin: 12px 0 0; }
+.legal p, .legal ol { margin: 0; }
+.legal ol { padding-left: 1.6em; display: flex; flex-direction: column; gap: 4px; }

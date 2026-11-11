@@ -117,6 +117,27 @@ function askPopup(text, opts) {
   });
 }
 
+// 自動ログアウト: 最後に使った時刻（画面の切り替え・前面に戻った時。1分に1回まで）から IDLE_DAYS 日を超えたら、開いた時・前面に戻った時にログアウト
+// shortcut: 端末の localStorage の時刻で見るだけ（時計を進めて戻す・消すと延びる）。サーバのログインの鍵は Supabase 側で別に切れる。サーバで切るなら Supabase Pro のセッションの期限（time-box・inactivity timeout）に替える
+const IDLE_DAYS = 30;
+const LEAVE_WAIT_MS = 5000; // 自動ログアウトの前に、画面を離れる前の保存を待つ長さ
+const Idle = (() => {
+  const KEY = 'gt-last-active';
+  const get = () => { try { return Number(localStorage.getItem(KEY)); } catch (e) { return 0; } };
+  const set = t => { try { localStorage.setItem(KEY, String(t)); } catch (e) { /* 入れられない端末は切らない */ } };
+  // 時刻が無い・読めない・未来なら今を入れて続ける
+  function over() {
+    const now = Date.now(), last = get();
+    if (!last || last > now) { set(now); return false; }
+    return now - last > IDLE_DAYS * 86400000;
+  }
+  function touch(force) {
+    const now = Date.now(), last = get();
+    if (force || !(last <= now && now - last < 60000)) set(now);
+  }
+  return { over, touch };
+})();
+
 const App = (() => {
   const UUID = '([0-9a-f-]{36})';
   const ROUTES = [
@@ -141,14 +162,24 @@ const App = (() => {
   ];
   const leaveHooks = []; // 画面を離れる前（報告書の保存待ちなど）
   const onLeave = fn => leaveHooks.push(fn);
+  const runLeave = async () => { for (const fn of leaveHooks) { try { await fn(); } catch (e) { console.warn(e); } } };
 
-  // 所属が無い人（招待されていない・外された）はログインしたまま「メンバーではありません」の画面だけ（noMember）
-  let noMember = false;
+  // 所属が取れない人はログインしたまま「メンバーではありません」か「利用を終えています」の画面だけ（noMember。closed = 会社が利用を終えた＝my_status が 'closed'）
+  let noMember = false, closed = false;
+  // my_status が引けない（通信・関数の失敗）・思わぬ値なら throw（「メンバーではありません」「利用を終えています」と決めつけない。呼んだ側が「読み込めませんでした」）
+  async function setNoMember() {
+    const s = await sb.rpc('my_status');
+    if (s.error || (s.data !== 'closed' && s.data !== 'none')) throw s.error || new Error('会社の状態を確かめられませんでした。開き直してください');
+    noMember = true;
+    ctx = null;
+    closed = s.data === 'closed';
+  }
   async function loadCtx(user) {
     const m = await sb.from('memberships').select('*').eq('user_id', user.id).maybeSingle();
     if (m.error) throw m.error;
-    noMember = !m.data;
-    if (noMember) { ctx = null; return; }
+    noMember = false;
+    closed = false;
+    if (!m.data) { await setNoMember(); return; }
     const o = await sb.from('orgs').select('*').eq('id', m.data.org_id).single();
     if (o.error) throw o.error;
     ctx = { user, membership: m.data, org: o.data };
@@ -157,9 +188,10 @@ const App = (() => {
   let routing = Promise.resolve();
   function route() {
     routing = routing.then(async () => {
-      for (const fn of leaveHooks) { try { await fn(); } catch (e) { console.warn(e); } }
+      await runLeave();
       const h = location.hash || '#cases';
-      if (noMember) { AuthUi.noMember(); return; }
+      if (ctx || noMember) Idle.touch();
+      if (noMember) { AuthUi.noMember(closed); return; }
       if (!ctx && h !== '#login') { location.replace('#login'); return; }
       if (ctx && h === '#login') { location.replace('#cases'); return; }
       for (const [re, fn] of ROUTES) {
@@ -176,21 +208,29 @@ const App = (() => {
   }
   // ログインのあと（AuthUi から）
   async function signedIn(user) {
-    await loadCtx(user);
+    Idle.touch(true);
+    try { await loadCtx(user); } catch (e) { throw new Error('読み込めませんでした: ' + errText(e)); }
     location.hash = '#cases';
   }
   let recovering = false;
   async function start() {
     renderTabs();
     sb.auth.onAuthStateChange((ev, session) => {
-      if (ev === 'SIGNED_OUT') { ctx = null; noMember = false; if (location.hash === '#login') route(); else location.hash = '#login'; }
+      if (ev === 'SIGNED_OUT') { ctx = null; noMember = false; closed = false; if (location.hash === '#login') route(); else location.hash = '#login'; }
       // 再設定メールのリンク・招待メールのリンク（js/supabase.js の SB_INVITE）から開いたら、パスワードを決める画面
       if (ev === 'PASSWORD_RECOVERY' || (ev === 'SIGNED_IN' && window.SB_INVITE)) { window.SB_INVITE = false; recovering = true; AuthUi.recovery(); }
     });
     window.addEventListener('hashchange', route);
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState !== 'visible' || !(ctx || noMember)) return;
+      if (Idle.over()) { await idleLogout(); route(); } else Idle.touch();
+    });
     try {
       const { data } = await sb.auth.getSession();
-      if (data && data.session) await loadCtx(data.session.user);
+      // メールのリンク（招待・パスワードの再設定）から開いたときは今ログインしたところなので、前の時刻で切らない
+      if (data && data.session && (recovering || window.SB_INVITE || window.SB_RECOVERY)) Idle.touch(true);
+      if (data && data.session && Idle.over()) await idleLogout();
+      else if (data && data.session) await loadCtx(data.session.user);
       // 初めの SIGNED_IN が onAuthStateChange を付ける前に済んでいたとき
       if (data && data.session && window.SB_INVITE) { window.SB_INVITE = false; recovering = true; AuthUi.recovery(); }
     } catch (e) {
@@ -205,9 +245,16 @@ const App = (() => {
   async function refreshRole() {
     const m = await sb.from('memberships').select('*').eq('user_id', ctx.user.id).maybeSingle();
     if (m.error) { console.warn(m.error); return true; } // 引けないときは今の役割のまま（本当の壁は DB）
-    if (!m.data) { noMember = true; ctx = null; AuthUi.noMember(); return false; }
+    if (!m.data) { await setNoMember(); AuthUi.noMember(closed); return false; }
     ctx.membership = m.data;
     return true;
+  }
+  async function idleLogout() {
+    // 書きかけ（報告書・見積書など）を先に保存する（ログアウトの後では保存できない）。保存が返らなくてもログアウトは止めない（5 秒まで待つ）
+    await Promise.race([runLeave(), new Promise(r => setTimeout(r, LEAVE_WAIT_MS))]);
+    const { error } = await sb.auth.signOut();
+    if (error) { console.warn(error); ctx = null; noMember = false; closed = false; } // 通信できなくても入ったままにしない（次に開いたときにまた試す）
+    AuthUi.info('30日使われなかったのでログアウトしました'); // 失敗ではないので赤くしない
   }
   // 設定で会社・自分を直したとき
   function setCtx(part, row) {

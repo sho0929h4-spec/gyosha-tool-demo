@@ -1,4 +1,4 @@
-// js/auth.js — ログイン・ログアウト・パスワード再設定のメール（と、メールのリンクから戻ったときの新しいパスワード）・所属の無い人の画面（ログアウトだけ）
+// js/auth.js — ログイン・ログアウト・パスワード再設定のメール（と、メールのリンクから戻ったときの新しいパスワード）・所属の無い人と利用を終えた会社の人の画面（ログアウトだけ）
 const AuthUi = (() => {
   let wired = false;
   const setMsg = (id, text, ok) => { const e = $(id); e.textContent = text || ''; e.classList.toggle('ok', !!ok); e.classList.toggle('err', !ok && !!text); };
@@ -72,6 +72,13 @@ const AuthUi = (() => {
   // 再設定メールのリンクから開いた（Supabase が PASSWORD_RECOVERY を知らせる）
   function recovery() { wire(); $('recover').hidden = false; showScreen('login'); $('recover-pw').focus(); }
   function error(text) { wire(); setMsg('login-msg', text); }
-  function noMember() { wire(); showScreen('nomember'); }
-  return { show, recovery, error, noMember };
+  // 知らせ（自動ログアウトなど）。失敗ではないので赤くしない
+  function info(text) { wire(); const e = $('login-msg'); e.textContent = text || ''; e.classList.remove('ok', 'err'); }
+  // closed = 会社が利用を終えた（App の my_status）。どちらもログアウトだけ
+  function noMember(closed) {
+    wire();
+    $('nm-msg').textContent = closed ? 'この会社は利用を終えています。運営に問い合わせてください' : 'この会社のメンバーではありません。管理者に招待を頼んでください';
+    showScreen('nomember');
+  }
+  return { show, recovery, error, info, noMember };
 })();
