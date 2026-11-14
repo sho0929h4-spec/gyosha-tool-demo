@@ -1,5 +1,5 @@
 // tests/e2e/fake-sb.js — supabase-js と同じ呼び方の小さい偽物（本物には一切つながない）。E2E とお試し版（dist-demo）で js/supabase.js の代わりに読む。
-// 保存は localStorage 'gyosha-demo-v1'（表とログイン状態）と 'gyosha-demo-v1-files'（写真などのファイル。data URL）。
+// 保存は localStorage 'gyosha-demo-v1'（表とログイン状態）と IndexedDB 'gyosha-demo-v1-files'（写真などのファイル。data URL）。
 // 真似るもの（supabase/migrations/001_init.sql と同じ決まり）:
 //   from(t).select/insert/update/delete + eq/neq/is/in/order/limit/range/single/maybeSingle（await できる）
 //   RLS: 自社（org_id）の行だけ。列 grant: 書ける列だけ（org_id・id・created_by などを送ると permission denied）。必須・文字数の一部
@@ -50,7 +50,32 @@ window.SB_RECOVERY = sbLink(location.hash) === 'recovery';
     return seed();
   }
   let db = load();
-  let files = (() => { try { return JSON.parse(localStorage.getItem(FKEY) || '{}') || {}; } catch (e) { return {}; } })();
+  // ファイルは IndexedDB に置く（localStorage は全部で約 5MB。図面や写真は数枚で入らなくなった）。files は読み込んだ写し（テストが見る）
+  let files = {};
+  const idb = new Promise((res, rej) => {
+    const r = indexedDB.open(FKEY, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('f');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+  const idbTx = (mode, fn) => idb.then(d => new Promise((res, rej) => {
+    const t = d.transaction('f', mode), out = fn(t.objectStore('f'));
+    t.oncomplete = () => res(out);
+    t.onabort = () => rej(t.error);
+  }));
+  // shortcut: IndexedDB を開けないブラウザでは、ファイルは開いている間だけ残る。困る人が出たら案内を出す
+  const filesReady = (async () => {
+    const [k, v] = await idbTx('readonly', s => [s.getAllKeys(), s.getAll()]);
+    k.result.forEach((key, i) => { files[key] = v.result[i]; });
+    // 前の版（localStorage に入れていた頃）のファイルを移す
+    let old = null;
+    try { old = JSON.parse(localStorage.getItem(FKEY) || 'null'); } catch (e) { /* 壊れていたら捨てる */ }
+    if (old && typeof old === 'object') {
+      await idbTx('readwrite', s => { Object.keys(old).forEach(key => { if (!files[key]) s.put(old[key], key); }); });
+      Object.keys(old).forEach(key => { if (!files[key]) files[key] = old[key]; });
+    }
+    localStorage.removeItem(FKEY);
+  })().catch(() => {});
   const FULL = 'お試し版の保存場所がいっぱいです。写真を減らすか、設定の「お試しデータを最初に戻す」で消してください';
   function persist() { localStorage.setItem(KEY, JSON.stringify(db)); }
 
@@ -285,20 +310,23 @@ window.SB_RECOVERY = sbLink(location.hash) === 'recovery';
       await wait();
       if (!own(path)) throw new Error('この会社のファイルではありません');
       const url = await toDataUrl(body);
-      const prev = files[path];
+      await filesReady;
+      try { await idbTx('readwrite', s => { s.put(url, path); }); }
+      catch (e) { if (e && e.name === 'QuotaExceededError') throw new Error(FULL); /* 開けない時は開いている間だけ持つ */ }
       files[path] = url;
-      try { localStorage.setItem(FKEY, JSON.stringify(files)); }
-      catch (e) { if (prev) files[path] = prev; else delete files[path]; throw new Error(FULL); }
     },
     async get(path) {
       await wait();
+      await filesReady;
       if (!own(path) || !files[path]) throw new Error('ファイルが見つかりません');
       return files[path];
     },
     async del(path) {
       await wait();
-      if (own(path)) delete files[path];
-      try { localStorage.setItem(FKEY, JSON.stringify(files)); } catch (e) { /* 減らす方なので失敗しない */ }
+      await filesReady;
+      if (!own(path)) return;
+      delete files[path];
+      try { await idbTx('readwrite', s => { s.delete(path); }); } catch (e) { /* 減らす方。失敗しても画面は止めない */ }
     }
   };
 
@@ -410,7 +438,8 @@ window.SB_RECOVERY = sbLink(location.hash) === 'recovery';
     store, ledger, worker,
     save() { persist(); }, // テストが db を直接書き換えたあと（役割を替える・所属を消す）に残す
     signInDemo() { return signIn(''); },
-    reset() { db = seed(); files = {}; localStorage.removeItem(KEY); localStorage.removeItem(FKEY); }
+    // 消し終わるまで待てる（お試し版はこのあと読み込み直す）
+    reset() { db = seed(); files = {}; localStorage.removeItem(KEY); localStorage.removeItem(FKEY); return idbTx('readwrite', s => { s.clear(); }).catch(() => {}); }
   };
   window.__fake = fake;
   window.sb = { from: t => new Query(t), auth, rpc };

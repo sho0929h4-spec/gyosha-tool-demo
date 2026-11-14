@@ -53,7 +53,7 @@
   b.textContent = 'お試しデータを最初に戻す';
   b.addEventListener('click', async () => {
     if (!(await askPopup('この端末のお試しデータを全部消して、最初の状態に戻しますか？', { title: 'お試しデータを最初に戻す', okLabel: '最初に戻す', danger: true, id: 'demo-reset-ask' }))) return;
-    window.__fake.reset();
+    await window.__fake.reset();
     location.replace(location.pathname + '#login');
     location.reload();
   });
