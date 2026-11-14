@@ -10,7 +10,8 @@
   const WORK_TYPES = [
     { key: 'noise', label: '音が出る工事', text: '作業中は騒音が発生いたします。' },
     { key: 'vibration', label: '振動がある工事', text: '作業中は振動が発生いたします。' },
-    { key: 'water', label: '断水がある', text: '断水中はトイレ・浴室・キッチン・洗面台など、水回りのご使用をお控えください。' },
+    { key: 'water', label: '断水がある', text: '断水中はトイレ・浴室・キッチン・洗面台など、水回りのご使用をお控えください。',
+      extra: { key: 'waterRooms', label: '断水する号室', placeholder: '例：501〜503号室、全戸' } },
     { key: 'drain', label: '排水制限がある', text: '作業中はキッチン・浴室・洗面台・洗濯機など、排水を伴うご使用をお控えください。',
       extra: { key: 'drainRooms', label: '排水制限のかかる号室', placeholder: '例：501〜503号室、全戸' } },
     { key: 'traffic', label: '通行制限がある', text: '作業中は一部通行しにくい場合がございます。' },
@@ -19,8 +20,8 @@
       extra: { key: 'otherWorkText', label: 'その他の工事内容', placeholder: '例：高圧洗浄機を使用いたします' } }
   ];
   const NOISE_VIBRATION_TEXT = '作業中は騒音・振動が発生いたします。';
-  // 赤・太字で強調する所（固定。欄は無い）: 題の号室、記書きの【排水制限】【工事日】【作業時間】の行と ※注記
-  const EMPHASIS = ['drain', 'date', 'time'];
+  // 赤・太字で強調する所（固定。欄は無い）: 題の号室、記書きの【断水】【排水制限】【工事日】【作業時間】の行と ※注記
+  const EMPHASIS = ['water', 'drain', 'date', 'time'];
   const REQUIRED = [['propertyName', '物件名'], ['roomNo', '号室'], ['workName', '工事名称']];
   // プレビューで直したとき、入力欄へ書き戻すキー（ほかは overrides に入れる）
   const WRITE_BACK = ['addressee', 'contactCompany', 'contactAddress', 'contactTel'];
@@ -29,7 +30,7 @@
   const P2 = ['近隣にお住まいの皆様にはご不便とご迷惑をおかけいたしますが、', '細心の注意を払いながら安全第一に工事を進めて参りますので、', 'ご理解とご協力の程、宜しくお願いいたします。'];
   const P3 = ['なお、何かお気づきの点がございましたら下記連絡先までご一報下さいます様、', '重ねて宜しくお願い申し上げます。'];
   // 直接編集した所の名前（「自動の文に戻す」のボタン）
-  const DETAIL_NAME = { place: '工事場所', content: '工事内容', drain: '排水制限', date: '工事日', time: '作業時間' };
+  const DETAIL_NAME = { place: '工事場所', content: '工事内容', water: '断水', drain: '排水制限', date: '工事日', time: '作業時間' };
   const SLOT_NAME = { noticeDate: '通知日', greeting: '挨拶の見出し', opening: '書き出し', subject: '題', body: '本文', closing: '敬具', ki: '記', contactTitle: 'お問い合わせ先の見出し' };
   const slotName = key => SLOT_NAME[key] || (/^detailLabel\./.test(key) ? '【' + (DETAIL_NAME[key.slice(12)] || '') + '】の見出し' : /^detail\./.test(key) ? '【' + (DETAIL_NAME[key.slice(7)] || '') + '】' : key);
 
@@ -107,6 +108,8 @@
       { key: 'place', label: '【工事場所】', value: prop + '　' + room, notes: [] },
       { key: 'content', label: '【工事内容】', value: work, notes: toNotes(texts) }
     ];
+    const water = (d.workTypes || {}).water ? normalizeRooms(d.waterRooms) : '';
+    if (water) details.push({ key: 'water', label: '【断水】', value: water, notes: [] });
     const drain = (d.workTypes || {}).drain ? normalizeRooms(d.drainRooms) : '';
     if (drain) details.push({ key: 'drain', label: '【排水制限】', value: drain, notes: [] });
     details.push({ key: 'date', label: '【工事日】', value: workDate(d), notes: [] });
@@ -130,7 +133,7 @@
       propertyName: str(c.name), addressee: '', addresseeEdited: false,
       noticeYear: String(t.getFullYear()), noticeMonth: String(t.getMonth() + 1), noticeDay: '', noticeKichijitsu: true,
       workDate: str(c.work_start), workDateEnd: str(c.work_end), workDateTbd: false, timeStart: '', timeEnd: '', timePlanned: true,
-      roomNo: str(c.room), workName: '復旧工事', workTypes, drainRooms: '', otherWorkText: '', otherNotice: '',
+      roomNo: str(c.room), workName: '復旧工事', workTypes, waterRooms: '', drainRooms: '', otherWorkText: '', otherNotice: '',
       contactCompany: str(o.name), contactAddress: str(o.address), contactTel: str(o.tel), overrides: {}
     };
   }

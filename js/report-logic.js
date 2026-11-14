@@ -22,13 +22,25 @@
   const WORK_CHECKLISTS = { investigate: CHECK_ITEMS, work: CHECK_ITEMS, other: CHECK_ITEMS };
   // 同じ案件に PDF を作った工事掲示があるとき、工事のチェックリストの最後に足す（簡易版 Task 80 と同じ考え。注意だけ）
   const NOTICE_REMOVED = '工事掲示を取り外した';
-  /* 鍵の取り扱い（全モード共通・任意） */
-  const KEY_CHECKLIST = ['鍵を借りた（借りていない場合はチェック不要）', '鍵を返却した', '返却時の写真をアップロードした'];
+  /* 利用者ごとの項目（memberships.report_items = { investigate: [...], work: [...], check: [...] }。無いキーは上の最初の項目）
+     investigate・work = 作業実施項目、check = 作業チェックリスト。ログインした時に setCustom で入れる */
+  const DEFAULT_LISTS = { investigate: INV_ITEMS, work: WORK_ITEMS, check: CHECK_ITEMS };
+  const ITEM_MAX = 40, ITEMS_MAX = 30;
+  const RESERVED = ['その他', '場所その他', '部位その他', NOTICE_REMOVED]; // 自由記載の印・自動で足す項目と同じ名前は使えない
+  const cleanList = v => [...new Set((Array.isArray(v) ? v : []).map(x => (typeof x === 'string' ? x.trim().slice(0, ITEM_MAX) : '')).filter(x => x && !RESERVED.includes(x)))].slice(0, ITEMS_MAX);
+  function cleanCustom(c) {
+    const out = {};
+    Object.keys(DEFAULT_LISTS).forEach(k => { if (c && Array.isArray(c[k])) out[k] = cleanList(c[k]); });
+    return out;
+  }
+  let custom = {};
+  const setCustom = c => { custom = cleanCustom(c); };
+  const listOf = k => custom[k] || DEFAULT_LISTS[k];
 
   const MODES = {
     investigate: {
       checkCardTitle: '作業実施項目', contentCardTitle: '作業内容',
-      checkGroups: [{ title: null, items: INV_ITEMS, free: true, freePrefix: 'その他', placeItems: INV_PLACE_ITEMS }],
+      checkGroups: [{ title: null, items: INV_ITEMS, list: 'investigate', free: true, freePrefix: 'その他', placeItems: INV_PLACE_ITEMS }],
       f1Last: true,
       f1Label: '作業実施内容', f1Req: true,
       showLeak: true, showAfter: false, showF2: true, showReason: true, showF4: true,
@@ -48,7 +60,7 @@
     work: {
       checkCardTitle: '作業実施項目・施工範囲', contentCardTitle: '作業内容',
       checkGroups: [
-        { title: '作業実施項目', items: WORK_ITEMS, free: true, freePrefix: 'その他' },
+        { title: '作業実施項目', items: WORK_ITEMS, list: 'work', free: true, freePrefix: 'その他' },
         { title: '場所', items: RESTORE_PLACES, free: true, freePrefix: '場所その他' },
         { title: '部位', items: RESTORE_PARTS, free: true, freePrefix: '部位その他' }
       ],
@@ -103,15 +115,25 @@
       prop: str(c.name), room: str(c.room), caseNo: `${String(d.getFullYear()).slice(2)}${pad(d.getMonth() + 1)}${pad(d.getDate())}-01`,
       workDate: isoDate(d), ts: '', te: '', items: [], free: {}, places: {},
       f1: '', note: '', workLabel: '', f2: '', f4: '', reason: '', leak: '', leakAction: '', leakRoom: '', afterStatusSel: '', afterNote: '',
-      workChecklist: [], keyChecklist: [], keyReturn: ''
+      workChecklist: []
     };
   }
   const arr = v => (Array.isArray(v) ? v : []);
   // 実施項目／施工範囲（今の区分の項目だけ。場所を選べる項目は「排水テスト（キッチン・浴室）」、自由記載は「その他: 〇〇」）
+  // 今の区分の項目のまとまり。list のあるまとまり（作業実施項目）は利用者の項目に替え、
+  // この報告書でチェック済みなのに一覧に無い項目（消した項目・ほかの人の項目）を後ろに足す（消しても前の報告書からは消えない）
+  function groups(mode, d) {
+    const m = modeOf(mode);
+    const gs = MODES[m].checkGroups.map(g => (g.list ? Object.assign({}, g, { items: listOf(g.list) }) : g));
+    const shown = gs.flatMap(g => g.items.concat(g.free ? [g.freePrefix] : []));
+    const others = Object.keys(MODES).filter(k => k !== m).flatMap(k => MODES[k].checkGroups.flatMap(g => (g.list ? listOf(g.list).concat(g.items) : g.items).concat(g.free ? [g.freePrefix] : [])));
+    const extra = arr(d && d.items).filter(i => typeof i === 'string' && i && !shown.includes(i) && !others.includes(i));
+    return gs.map(g => (g.list && extra.length ? Object.assign({}, g, { items: g.items.concat(extra) }) : g));
+  }
   function checkedItems(d, mode) {
     const on = arr(d && d.items), free = (d && d.free) || {}, places = (d && d.places) || {};
     const out = [];
-    MODES[modeOf(mode)].checkGroups.forEach(g => {
+    groups(mode, d).forEach(g => {
       const withPlace = i => { const p = arr(g.placeItems).includes(i) ? arr(places[i]).filter(x => RESTORE_PLACES.includes(x)) : []; return p.length ? `${i}（${p.join('・')}）` : i; };
       g.items.forEach(i => { if (on.includes(i)) out.push(withPlace(i)); });
       if (g.free && on.includes(g.freePrefix)) { const t = str(free[g.freePrefix]); out.push(t ? `${withPlace(g.freePrefix)}: ${t}` : withPlace(g.freePrefix)); }
@@ -134,11 +156,14 @@
     return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${wd}）`;
   }
   const todayJa = (now) => { const d = now || new Date(); return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`; };
-  // 作業チェックリスト（今の区分の項目の順）・鍵
+  // 作業チェックリスト（利用者の項目の順。この報告書でチェック済みなのに一覧に無い項目は後ろに足す）
   //   withNotice: 画面に「工事掲示を取り外した」を出すか（工事のときだけ）。PDF ではチェックしてあれば出す
-  const workItems = (mode, withNotice) => WORK_CHECKLISTS[modeOf(mode)].concat(modeOf(mode) === 'work' && withNotice !== false ? [NOTICE_REMOVED] : []);
-  const workChecked = (d, mode) => workItems(mode).filter(i => arr(d && d.workChecklist).includes(i));
-  const keyChecked = d => KEY_CHECKLIST.filter(i => arr(d && d.keyChecklist).includes(i));
+  function workItems(mode, withNotice, d) {
+    const list = listOf('check');
+    const extra = arr(d && d.workChecklist).filter(i => typeof i === 'string' && i && i !== NOTICE_REMOVED && !list.includes(i));
+    return list.concat(extra, modeOf(mode) === 'work' && withNotice !== false ? [NOTICE_REMOVED] : []);
+  }
+  const workChecked = (d, mode) => workItems(mode, true, d).filter(i => arr(d && d.workChecklist).includes(i));
   // 結果の表（値がある行だけ）
   function resultRows(d, mode) {
     const vals = { f1: str(d.f1), note: str(d.note), f2: str(d.f2), f4: str(d.f4), leak: str(d.leak), leakAction: leakActionText(d), reason: str(d.reason), afterStatus: afterStatusText(d) };
@@ -174,8 +199,8 @@
   const modeName = (mode, d) => (modeOf(mode) === 'other' ? str(d && d.workLabel) || 'その他' : MODE_LABEL[modeOf(mode)]);
   const docLabel = (mode, d) => modeName(mode, d) + '報告書';
 
-  const api = { WTYPE_MODE, MODE_LABEL, INV_ITEMS, INV_PLACE_ITEMS, RESTORE_PLACES, RESTORE_PARTS, AFTER_STATUS, LEAK, LEAK_ACTION, WORK_CHECKLISTS, NOTICE_REMOVED, KEY_CHECKLIST, MODES, HINT, PHASES, PHASE_COLORS,
-    modeOf, modeName, newData, checkedItems, leakActionText, afterStatusText, timeStr, fmtDate, todayJa, workItems, workChecked, keyChecked, resultRows, validate, docLabel, setField, movePhoto, removePhoto };
+  const api = { WTYPE_MODE, MODE_LABEL, INV_ITEMS, INV_PLACE_ITEMS, RESTORE_PLACES, RESTORE_PARTS, AFTER_STATUS, LEAK, LEAK_ACTION, WORK_CHECKLISTS, NOTICE_REMOVED, DEFAULT_LISTS, ITEM_MAX, ITEMS_MAX, MODES, HINT, PHASES, PHASE_COLORS,
+    modeOf, modeName, newData, checkedItems, leakActionText, afterStatusText, timeStr, fmtDate, todayJa, workItems, workChecked, groups, setCustom, cleanCustom, listOf, resultRows, validate, docLabel, setField, movePhoto, removePhoto };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ReportLogic = api;
 })(typeof window !== 'undefined' ? window : globalThis);

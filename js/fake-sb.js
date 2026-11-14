@@ -9,7 +9,7 @@
 //   audit_log: orgs の update（変わった列・会社名／住所／登録番号は前後の値 changes）・招待（1時間 30 人まで。too_many）・teikei_rates の保存／標準に戻す・cases の delete・set_member_role で行が入る
 //   auth: signInWithPassword（メールとパスワードが空でなければ通す）/ signOut / getSession / getUser / onAuthStateChange / resetPasswordForEmail（送らずに記録）/ updateUser
 //   ファイル置き場（本物は Cloudflare R2）: window.__fake.store.put / get / del（1段目のフォルダ = 自社）。呼ぶのは tests/e2e/fake-files.js（js/files.js の代わり）
-//   rpc: my_org_id / my_status / is_admin / estimate_next_number / estimate_issue / org_file_bytes / org_members / set_member_role
+//   rpc: my_org_id / my_status / is_admin / estimate_next_number / estimate_issue / org_file_bytes / org_members / set_member_role / set_report_items（会社の人なら誰でも）
 //   利用を終えた会社（orgs.closed_at。本物と同じく利用者は直せない。テストは db を直接書く）: その会社の人は select 0 件・書けない・rpc は my_status だけ（'closed'）
 // 最初のデータ: 会社1つ・利用者1人（管理者）・案件0件。テストからは window.__fake で中を見る。
 // 招待・再設定メールのリンクの印（js/supabase.js と同じ行。試験 tests/link-flags.test.js が同じかを見る）
@@ -411,6 +411,16 @@ window.SB_RECOVERY = sbLink(location.hash) === 'recovery';
       audit(myOrg(), 'role_changed', { target: p.p_user, from: prev, to: p.p_role });
       persist();
       return { data: null, error: null };
+    }
+    if (fn === 'set_report_items') { // 会社の人なら誰でも（本物は security definer の関数。orgs の update は管理者だけ）
+      const o = db.orgs.find(x => x.id === myOrg()), v = args && args.p_items;
+      if (!o || !v || typeof v !== 'object' || Array.isArray(v)) return { data: null, error: denied() };
+      if (JSON.stringify(v).length > 20000) return { data: null, error: err('check constraint', '23514') };
+      const before = JSON.stringify(db);
+      o.report_items = JSON.parse(JSON.stringify(v));
+      audit(o.id, 'org_updated', { cols: ['report_items'] });
+      try { persist(); } catch (e) { db = JSON.parse(before); return { data: null, error: err(FULL) }; }
+      return { data: o.report_items, error: null };
     }
     if (fn === 'org_file_bytes') return { data: db.files.filter(x => x.org_id === myOrg()).reduce((n, x) => n + x.bytes, 0), error: null };
     if (fn === 'estimate_next_number') {

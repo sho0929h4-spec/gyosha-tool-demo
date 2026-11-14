@@ -50,7 +50,6 @@
 .rp-cl{border:1px solid #c8d6e5;border-top:none;padding:8px 12px;background:#f7fafc;margin-bottom:5mm;display:flex;flex-direction:column;gap:4px;}
 .rp-cl-item{font-size:9pt;color:#1e293b;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;}
 .rp-cl-off{color:#94a3b8;}
-.rp-cl-key{margin-top:4px;padding-top:6px;border-top:1px dashed #c8d6e5;font-weight:700;color:#1a3a5c;}
 .rp-cover-foot{margin-top:auto;padding-top:4mm;border-top:1px solid #e2e8f0;font-size:8.5pt;color:#64748b;display:flex;justify-content:space-between;align-items:baseline;gap:4mm;}
 .rp-cf-co{font-weight:700;flex-shrink:0;max-width:55mm;overflow-wrap:anywhere;}
 .rp-pno{flex-shrink:0;white-space:nowrap;}
@@ -185,16 +184,13 @@
     res.appendChild(rb);
     page.appendChild(res);
 
-    // チェックリスト（作業＋鍵。チェックしたものだけ）と鍵の返却方法
-    const cl = [...RL().workChecked(d, mode), ...RL().keyChecked(d)];
-    const keyReturn = trim(d.keyReturn);
-    if (cl.length || keyReturn) {
+    // チェックリスト（チェックしたものだけ）
+    const cl = RL().workChecked(d, mode);
+    if (cl.length) {
       page.appendChild(el('div', 'rp-sec', 'チェックリスト'));
       const box = el('div', 'rp-cl');
       if (forScreen) box.dataset.field = 'checklist';
-      if (cl.length) cl.forEach(i => box.appendChild(el('div', 'rp-cl-item', '✓ ' + i)));
-      else box.appendChild(el('span', 'rp-nodata', '記録なし'));
-      if (keyReturn) box.appendChild(el('div', 'rp-cl-item rp-cl-key', '鍵の返却方法：' + keyReturn));
+      cl.forEach(i => box.appendChild(el('div', 'rp-cl-item', '✓ ' + i)));
       page.appendChild(box);
     }
 

@@ -55,6 +55,7 @@ function toast(text) {
 //   askPopup(text, { title, okLabel, cancelLabel, danger, id }) → Promise<boolean>
 //   input: { label, value, placeholder } を渡すと欄を1つ出し、OK = 入れた文字（前後の空白を除く）、× と「キャンセル」= null
 //   more: [{ label, value, id, danger }] を渡すと OK の上にボタンを足し、押すと { more: value }（図面の印の「削除」など）
+//   fields: [{ key, label, value, placeholder, inputMode, options }]（input と一緒に）を渡すと欄を横に並べて足し、OK = { text: 入れた文字, [key]: 値 }（options があれば選ぶ欄。図面の数量・単位）
 function askPopup(text, opts) {
   const o = opts || {};
   const prev = document.getElementById('ask-pop');
@@ -88,7 +89,9 @@ function askPopup(text, opts) {
     let inp = null;
     const no = dBtn(o.cancelLabel || 'キャンセル', 'btn ghost', () => done(o.input ? null : false));
     no.id = 'ask-pop-no';
-    const ok = dBtn(o.okLabel || 'OK', 'btn' + (o.danger ? ' red' : ''), () => done(inp ? inp.value.trim() : true));
+    const extra = [];
+    const ok = dBtn(o.okLabel || 'OK', 'btn' + (o.danger ? ' red' : ''), () => done(!inp ? true : !extra.length ? inp.value.trim()
+      : extra.reduce((r, [k, e]) => { r[k] = e.value.trim(); return r; }, { text: inp.value.trim() })));
     ok.id = 'ask-pop-ok';
     act.append(no, ok);
     dlg.append(hd, t);
@@ -103,6 +106,21 @@ function askPopup(text, opts) {
       inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); ok.click(); } });
       f.append(l, inp);
       dlg.appendChild(f);
+      if (o.fields && o.fields.length) {
+        const row = mk('div', 'row');
+        o.fields.forEach(x => {
+          const ff = mk('div', 'ff'), fl = mk('label', null, x.label || '');
+          const e = mk(x.options ? 'select' : 'input');
+          if (x.options) x.options.forEach(v => e.appendChild(new Option(v, v)));
+          else { e.type = 'text'; e.inputMode = x.inputMode || 'text'; e.placeholder = x.placeholder || ''; e.maxLength = 12; }
+          e.id = fl.htmlFor = 'ask-pop-' + x.key;
+          e.value = x.value || '';
+          ff.append(fl, e);
+          row.appendChild(ff);
+          extra.push([x.key, e]);
+        });
+        dlg.appendChild(row);
+      }
     }
     if (o.more && o.more.length) {
       const mr = mk('div', 'modal-act col');
@@ -183,6 +201,7 @@ const App = (() => {
     const o = await sb.from('orgs').select('*').eq('id', m.data.org_id).single();
     if (o.error) throw o.error;
     ctx = { user, membership: m.data, org: o.data };
+    ReportLogic.setCustom(o.data.report_items); // 報告書の項目（会社で1つ）
     document.querySelectorAll('.js-org-name').forEach(e => { e.textContent = ctx.org.name || ''; });
   }
   let routing = Promise.resolve();

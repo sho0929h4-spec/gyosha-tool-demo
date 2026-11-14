@@ -129,6 +129,18 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-
 .chip[aria-pressed="true"] { background: #222; color: #fff; border-color: #222; }
 .chip[aria-pressed="true"] .chip-box { background: #fff; border-color: #fff; color: #222; }
 .grp-t { font-size: 13px; color: #555; font-weight: 600; }
+/* 報告書: 項目の設定（歯車）と、項目を直すポップアップ */
+.card-t:has(.gear) { display: flex; align-items: center; gap: 6px; }
+.gear { margin-left: auto; width: 44px; height: 44px; flex: none; border: 0; background: none; padding: 10px; cursor: pointer; color: #555; }
+.gear svg { width: 24px; height: 24px; display: block; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
+.ie-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.ie-row { display: flex; align-items: center; gap: 6px; }
+.ie-name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 15px; }
+.ie-row .btn { flex: none; width: auto; padding: 0 10px; }
+.ie-add { display: flex; gap: 8px; margin: 8px 0; }
+.ie-add input { flex: 1; min-width: 0; font-size: 16px; }
+.ie-add .btn { flex: none; width: auto; padding: 0 14px; }
+#rp-items-pop .modal-act { margin-top: 12px; }
 .photos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .ph { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; background: #fff; }
 .ph-img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #ddd; border: 0; padding: 0; cursor: pointer; }

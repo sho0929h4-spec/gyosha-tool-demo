@@ -46,11 +46,12 @@
       g.lineJoin = 'miter';
       g.strokeStyle = color;
       g.stroke();
-      if (m.label) { const b = DL.bbox(m.points); const [x, y] = map({ x: b.x, y: b.y }); label(m.label, x + fontPx / 2, y + fontPx / 2, color, 'left'); }
+      const t = DL.markText(m);
+      if (t) { const b = DL.bbox(m.points); const [x, y] = map({ x: b.x, y: b.y }); label(t, x + fontPx / 2, y + fontPx / 2, color, 'left'); }
     });
   }
 
-  // 下の帯: 1行目「物件名 号室 ・ 日付」、2行目 凡例（色の四角＋部位名）
+  // 下の帯: 1行目「物件名 号室 ・ 日付」、2行目 凡例（色の四角＋部位名＋数量の合計）
   function drawBand(g, band, title, legend) {
     const K = PX_MM;
     const x0 = band.x * K, y0 = band.y * K, w = band.w * K;
@@ -69,8 +70,9 @@
       g.globalAlpha = 0.35; g.fillStyle = l.color; g.fillRect(x, y - sq / 2, sq, sq);
       g.globalAlpha = 1; g.strokeStyle = l.color; g.lineWidth = LINE_MM * K; g.strokeRect(x, y - sq / 2, sq, sq);
       g.fillStyle = '#222';
-      g.fillText(l.label, x + sq + 1.5 * K, y);
-      x += sq + 1.5 * K + g.measureText(l.label).width + 6 * K;
+      const t = [l.label, l.total].filter(Boolean).join(' '); // 「天井 12.5㎡・3か所」（範囲に入れた数量の合計）
+      g.fillText(t, x + sq + 1.5 * K, y);
+      x += sq + 1.5 * K + g.measureText(t).width + 6 * K;
     });
   }
 

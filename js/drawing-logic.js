@@ -1,6 +1,6 @@
 // js/drawing-logic.js — 図面の規則（UMD: ブラウザは window.DrawingLogic / node は module.exports。tests/drawing-logic.test.js）。DOM に触らない
 // 印の形（drawings.marks）: [{ id, type: 'rect'|'poly'|'text', part: 'ceiling'|'wall'|'floor', points: [{ x, y }], label }]
-//   points は図の幅・高さに対する 0〜1 の割合。四角は対角の2点、多角形は3点以上、文字は1点（label が中身）。
+//   points は図の幅・高さに対する 0〜1 の割合。四角は対角の2点、多角形は3点以上、文字は1点（label が中身）。四角・多角形は数量 qty・単位 unit も持てる。
 (function (root) {
   const inNode = typeof module !== 'undefined' && module.exports;
   const CL = () => (inNode ? require('./case-logic.js') : root.CaseLogic);
@@ -24,17 +24,29 @@
       const points = m.points.filter(p => p && fin(p.x) && fin(p.y)).map(p => ({ x: clamp01(p.x), y: clamp01(p.y) }));
       const label = str(m.label).slice(0, LABEL_MAX);
       if (points.length < MIN_POINTS[m.type] || (m.type === 'text' && !label)) return [];
-      return [{ id: str(m.id) || newMarkId(), type: m.type, part: m.part, points: m.type === 'rect' ? points.slice(0, 2) : m.type === 'text' ? points.slice(0, 1) : points, label }];
+      const qty = m.type === 'text' ? '' : cleanQty(m.qty);
+      return [Object.assign({ id: str(m.id) || newMarkId(), type: m.type, part: m.part, points: m.type === 'rect' ? points.slice(0, 2) : m.type === 'text' ? points.slice(0, 1) : points, label },
+        qty ? { qty, unit: UNITS.includes(m.unit) ? m.unit : UNITS[0] } : {})];
     });
   }
 
-  // 凡例: 使った部位だけ・天井→壁→床。count = 範囲（四角・多角形）の数、texts = 付けた文字（重ねない）
+  // 範囲の数量（四角・多角形だけ。文字の印には付けない）: qty = '12.5'（半角の数字。小数は2桁まで）、unit = UNITS のどれか。数量が無ければ両方持たない
+  const UNITS = ['㎡', 'm', 'か所', '枚', '本', '式'];
+  function cleanQty(v) {
+    const t = str(v).replace(/[０-９．]/g, c => (c === '．' ? '.' : String.fromCharCode(c.charCodeAt(0) - 0xFEE0)));
+    return /^\d{1,7}(\.\d{1,2})?$/.test(t) && Number(t) > 0 ? String(Number(t)) : '';
+  }
+  // 図の上・選んだ印の説明に出す文字: 「クロス張替 12.5㎡」
+  const markText = m => [m.label, m.qty ? m.qty + m.unit : ''].filter(Boolean).join(' ');
+
+  // 凡例: 使った部位だけ・天井→壁→床。count = 範囲（四角・多角形）の数、texts = 付けた文字（重ねない）、total = 数量の合計（単位ごと。「20.5㎡・3か所」）
   function legend(marks) {
     const ms = normalize(marks);
     return ORDER.filter(p => ms.some(m => m.part === p)).map(p => {
       const own = ms.filter(m => m.part === p);
+      const total = UNITS.map(u => { const n = own.filter(m => m.unit === u).reduce((a, m) => a + Number(m.qty), 0); return n ? Math.round(n * 100) / 100 + u : ''; }).filter(Boolean).join('・');
       return { part: p, label: PARTS[p].label, color: PARTS[p].color,
-        count: own.filter(m => m.type !== 'text').length, texts: [...new Set(own.map(m => m.label).filter(Boolean))] };
+        count: own.filter(m => m.type !== 'text').length, texts: [...new Set(own.map(m => m.label).filter(Boolean))], total };
     });
   }
 
@@ -109,7 +121,7 @@
   // 「図面_サンプルハイツ_302号室.pdf」（号室が無ければ付けない）
   const fileName = c => ['図面', safe(c && c.name), safe(CL().roomLabel(c && c.room))].filter(Boolean).join('_') + '.pdf';
 
-  const api = { PARTS, ORDER, LABEL_MAX, TEXT_BOX, BAND, normalize, legend, bbox, inPoly, hitTest, handles, hitHandle, moveMark, moveHandle, fitPage, fileName, newMarkId };
+  const api = { PARTS, ORDER, LABEL_MAX, TEXT_BOX, BAND, normalize, legend, UNITS, cleanQty, markText, bbox, inPoly, hitTest, handles, hitHandle, moveMark, moveHandle, fitPage, fileName, newMarkId };
   if (inNode) module.exports = api;
   else root.DrawingLogic = api;
 })(typeof window !== 'undefined' ? window : globalThis);

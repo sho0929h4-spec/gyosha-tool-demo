@@ -115,6 +115,94 @@ const ReportUi = (() => {
     });
     return b;
   }
+  /* ---------- 項目の設定（歯車。会社で1つ = orgs.report_items。会社の人なら誰でも直せて、全員の画面に効く） ---------- */
+  function gear(id, name, key) {
+    const b = mk('button', 'gear');
+    b.type = 'button';
+    b.id = id;
+    b.setAttribute('aria-label', name + 'の項目を設定');
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    const p = document.createElementNS(NS, 'path');
+    p.setAttribute('d', 'M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-1.7-1L15 3.5h-4l-.3 2.5a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.6 7.6 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7.6 7.6 0 0 0 1.7-1l2.4 1 2-3.4zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z');
+    svg.appendChild(p);
+    b.appendChild(svg);
+    b.addEventListener('click', () => editItems(name, key));
+    return b;
+  }
+  // ポップアップ（× と「キャンセル」でだけ閉じる）。保存 = 会社の項目として残し（rpc set_report_items）、画面を作り直す（書きかけの報告書はそのまま）
+  function editItems(name, key) {
+    let list = RL.listOf(key).slice();
+    const bg = mk('div', 'modal-bg');
+    const dlg = mk('div', 'modal');
+    dlg.id = 'rp-items-pop';
+    dlg.setAttribute('role', 'dialog');
+    dlg.setAttribute('aria-modal', 'true');
+    dlg.setAttribute('aria-label', name + 'の設定');
+    const close = () => bg.remove();
+    const hd = mk('div', 'modal-hd');
+    const x = dBtn('×', 'modal-x', close);
+    x.id = 'rp-items-x';
+    x.setAttribute('aria-label', '閉じる');
+    hd.append(mk('h3', null, name + 'の設定'), x);
+    const rows = mk('div', 'ie-list');
+    rows.id = 'rp-items-list';
+    const msg = mk('div', 'msg');
+    msg.id = 'rp-items-msg';
+    const draw = () => {
+      rows.replaceChildren();
+      if (!list.length) rows.appendChild(mk('div', 'hint', '項目がありません。下で足してください'));
+      list.forEach((it, i) => {
+        const r = mk('div', 'ie-row');
+        const move = (label, to) => { const b = dBtn(label, 'btn ghost sm', () => { list.splice(to, 0, list.splice(i, 1)[0]); draw(); }); b.disabled = to < 0 || to >= list.length; b.setAttribute('aria-label', it + 'を' + label); return b; };
+        const del = dBtn('消す', 'btn ghost sm', () => { list.splice(i, 1); draw(); });
+        del.setAttribute('aria-label', it + 'を消す');
+        r.append(mk('span', 'ie-name', it), move('上へ', i - 1), move('下へ', i + 1), del);
+        rows.appendChild(r);
+      });
+    };
+    const add = mk('input');
+    add.type = 'text';
+    add.id = 'rp-items-new';
+    add.maxLength = RL.ITEM_MAX;
+    add.placeholder = '足す項目の名前';
+    add.setAttribute('aria-label', '足す項目の名前');
+    const addBtn = dBtn('追加', 'btn ghost sm', () => {
+      const next = RL.cleanCustom({ [key]: list.concat([add.value]) })[key]; // 空・同じ名前・使えない名前（その他 など）は入らない
+      if (next.length === list.length) { msg.className = 'msg err'; msg.textContent = !add.value.trim() ? '名前を入れてください' : list.length >= RL.ITEMS_MAX ? '項目は ' + RL.ITEMS_MAX + ' 個までです' : 'その名前は使えません（同じ名前があるか、自由記載と重なります）'; return; }
+      list = next; add.value = ''; msg.textContent = ''; draw();
+    });
+    addBtn.id = 'rp-items-add';
+    const addRow = mk('div', 'ie-add');
+    addRow.append(add, addBtn);
+    const reset = dBtn('最初の項目に戻す', 'btn ghost sm', () => { list = RL.DEFAULT_LISTS[key].slice(); msg.textContent = ''; draw(); });
+    reset.id = 'rp-items-reset';
+    const act = mk('div', 'modal-act');
+    const no = dBtn('キャンセル', 'btn ghost', close);
+    no.id = 'rp-items-no';
+    const save = dBtn('保存', 'btn', async () => {
+      save.disabled = true;
+      try {
+        const items = RL.cleanCustom(ctx.org.report_items);
+        if (list.join('\n') === RL.DEFAULT_LISTS[key].join('\n')) delete items[key]; else items[key] = list;
+        const { data, error } = await sb.rpc('set_report_items', { p_items: items });
+        if (error) throw error;
+        ctx.org.report_items = data;
+        RL.setCustom(data);
+        close();
+        render();
+        toast('項目を保存しました');
+      } catch (e) { msg.className = 'msg err'; msg.textContent = '保存できませんでした: ' + errText(e); save.disabled = false; }
+    });
+    save.id = 'rp-items-save';
+    act.append(no, save);
+    dlg.append(hd, mk('p', 'hint', '会社の全員の画面に効きます。消しても、前に作った報告書のチェックは残ります。'), rows, addRow, msg, reset, act);
+    bg.appendChild(dlg);
+    document.body.appendChild(bg);
+    draw();
+  }
   const nowHM = () => { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
 
   /* ---------- 画面 ---------- */
@@ -164,8 +252,8 @@ const ReportUi = (() => {
     // 作業実施項目 / 施工範囲
     if (cfg.checkGroups.length) {
       const c = card(cfg.checkCardTitle, 'rp-items');
-      c.querySelector('.card-t').append(mk('span', 'hint', '（押すと✓）'));
-      cfg.checkGroups.forEach((grp, gi) => {
+      c.querySelector('.card-t').append(mk('span', 'hint', '（押すと✓）'), gear('rp-items-gear', '作業実施項目', cfg.checkGroups[0].list));
+      RL.groups(st.mode, st.d).forEach((grp, gi) => {
         if (grp.title) c.appendChild(mk('div', 'grp-t', grp.title));
         const chips = mk('div', 'chips');
         // 場所を選べる項目（排水テスト・その他）: 押すと下に場所のチップが出る
@@ -258,15 +346,10 @@ const ReportUi = (() => {
 
     // チェックリスト
     const cl = card('チェックリスト', 'rp-checklist');
-    cl.appendChild(mk('div', 'grp-t', '作業チェックリスト'));
+    cl.querySelector('.card-t').append(gear('rp-checklist-gear', 'チェックリスト', 'check'));
     const wl = mk('div', 'chips col');
-    RL.workItems(st.mode, st.noticeMade).forEach(i => wl.appendChild(chip(i, 'workChecklist', i)));
+    RL.workItems(st.mode, st.noticeMade, st.d).forEach(i => wl.appendChild(chip(i, 'workChecklist', i)));
     cl.appendChild(wl);
-    cl.appendChild(mk('div', 'grp-t', '鍵の取り扱い（借りた場合のみ）'));
-    const kl = mk('div', 'chips col');
-    RL.KEY_CHECKLIST.forEach(i => kl.appendChild(chip(i, 'keyChecklist', i)));
-    cl.appendChild(kl);
-    cl.appendChild(field('鍵の返却方法', input('rp-keyreturn', 'text', 'keyReturn', { maxLength: 100, placeholder: '例：管理会社へ手渡し／ポスト投函　※返却がない場合は空欄' })));
     body.appendChild(cl);
 
     const notes = mk('div', 'notes');
@@ -409,7 +492,10 @@ const ReportUi = (() => {
     const r = await sb.from('reports').select('*').eq('id', id).maybeSingle();
     if (r.error) throw r.error;
     if (!r.data) { toast('報告書が見つかりませんでした'); location.replace('#cases'); return; }
-    const [caseRow, notices] = await Promise.all([CasesApi.get(r.data.case_id), DocsApi.notices(r.data.case_id).catch(() => [])]);
+    // 報告書の項目（会社で1つ）は開くたびに読み直す（ほかの人が歯車で変えたかもしれない。読めなければ今のまま）
+    const [caseRow, notices, items] = await Promise.all([CasesApi.get(r.data.case_id), DocsApi.notices(r.data.case_id).catch(() => []),
+      sb.from('orgs').select('report_items').eq('id', ctx.org.id).maybeSingle()]);
+    if (items.data) { ctx.org.report_items = items.data.report_items; RL.setCustom(items.data.report_items); }
     st = { row: r.data, caseRow: caseRow || {}, noticeMade: notices.some(n => n.data && n.data.pdf_at), mode: RL.modeOf(r.data.work_type), d: Object.assign(RL.newData(caseRow), r.data.data || {}),
       photos: Array.isArray(r.data.photos) ? r.data.photos : [], urls: {}, timer: null, saving: null, dirty: false, savedAt: '', err: '' };
     setSub();

@@ -121,7 +121,8 @@ const MembersUi = (() => {
       const d = r.detail || {};
       // detail.id（Worker が書くようになる）か target。外した人は名前が引けないので「外した人」（かっこを重ねない）
       const extra = r.action === 'case_deleted' ? d.name : r.action === 'member_invited' ? d.email : r.action === 'member_removed' ? (d.name || nameById(d.id) || '外した人')
-        : r.action === 'role_changed' ? ((nameById(d.id || d.target) || '外した人') + ' → ' + (ROLE[d.to] || '')) : '';
+        : r.action === 'role_changed' ? ((nameById(d.id || d.target) || '外した人') + ' → ' + (ROLE[d.to] || ''))
+        : r.action === 'org_updated' && Array.isArray(d.cols) && d.cols.join() === 'report_items' ? '報告書の項目' : '';
       const li = mk('div', 'audit-li');
       li.append(mk('span', 'hint', new Date(r.at).toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })),
         mk('span', null, who(r.user_id) + '　' + (ACT[r.action] || 'その他の操作') + (extra ? '（' + extra + '）' : '')));

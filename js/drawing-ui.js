@@ -7,10 +7,10 @@ const DrawingUi = (() => {
   const NS = 'http://www.w3.org/2000/svg';
   const TOOLS = { rect: '四角', poly: '多角形', text: '文字', move: '動かす' };
   const HINT = {
-    rect: '図の上をドラッグすると四角を描きます。印を押すと文字・部位・削除。',
+    rect: '図の上をドラッグすると四角を描きます。印を押すと文字・数量・部位・削除。',
     poly: '角を順に押して、最後に「閉じる」。範囲の上からも描けます（範囲を直すときは「四角」にして押す）。',
     text: '文字を置く所を押してください。文字を押すと直す・削除。',
-    move: '印を押して選び、そのままドラッグで動かします。角の丸をドラッグすると形が変わります。もう一度押すと文字・部位・削除。',
+    move: '印を押して選び、そのままドラッグで動かします。角の丸をドラッグすると形が変わります。もう一度押すと文字・数量・部位・削除。',
     zoom: '二本指で写真を拡大・移動（パソコンはホイールとドラッグ）。描くときは「描く」に戻します。'
   };
   let st = null; // { row, caseRow, marks, hist, part, tool, mode, poly, drag, sel, imgW, imgH, pz, timer, saving, dirty, savedAt, err }
@@ -145,7 +145,8 @@ const DrawingUi = (() => {
           ? (b => svgEl('rect', shapeAttrs(m.part, { x: b.x * st.imgW, y: b.y * st.imgH, width: b.w * st.imgW, height: b.h * st.imgH })))(DL.bbox(m.points))
           : svgEl('polygon', shapeAttrs(m.part, { points: m.points.map(p => px(p).join(',')).join(' ') }));
         g.appendChild(shape);
-        if (m.label) { const b = DL.bbox(m.points); g.appendChild(textEl(b.x * st.imgW + fontPx() / 2, b.y * st.imgH + fontPx() / 2, m.label, m.part, 'start')); }
+        const t = DL.markText(m);
+        if (t) { const b = DL.bbox(m.points); g.appendChild(textEl(b.x * st.imgW + fontPx() / 2, b.y * st.imgH + fontPx() / 2, t, m.part, 'start')); }
       }
       svg.appendChild(g);
     });
@@ -181,14 +182,14 @@ const DrawingUi = (() => {
       const li = mk('div', 'dw-li');
       const sw = mk('span', 'dw-sw');
       sw.style.background = x.color;
-      li.append(sw, mk('span', null, [x.label, x.count ? x.count + 'か所' : '', x.texts.join('・')].filter(Boolean).join(' ')));
+      li.append(sw, mk('span', null, [x.label, x.count ? x.count + 'か所' : '', x.total ? '合計 ' + x.total : '', x.texts.join('・')].filter(Boolean).join(' ')));
       box.appendChild(li);
     });
   }
   function renderSelBar(sel) {
     const bar = $('dw-selbar');
     bar.hidden = !sel;
-    if (sel) $('dw-sel-t').textContent = DL.PARTS[sel.part].label + 'の' + TOOLS[sel.type] + (sel.label ? '「' + sel.label + '」' : '') + ' を選んでいます';
+    if (sel) $('dw-sel-t').textContent = DL.PARTS[sel.part].label + 'の' + TOOLS[sel.type] + (DL.markText(sel) ? '「' + DL.markText(sel) + '」' : '') + ' を選んでいます';
   }
   function renderPolyBar() {
     const bar = $('dw-polybar');
@@ -306,25 +307,38 @@ const DrawingUi = (() => {
       edit(() => st.marks.push({ id: DL.newMarkId(), type: 'text', part, points: [p], label: t }));
     }
   }
-  // 印を押した: 文字を付ける（文字の印は文字を直す）／部位を変える／削除
+  // 印を押した: 文字と数量・単位を付ける（文字の印は文字を直すだけ）／部位を変える／削除
   async function markMenu(m) {
     const s = st;
     const others = DL.ORDER.filter(k => k !== m.part);
-    const r = await askPopup(DL.PARTS[m.part].label + 'の' + TOOLS[m.type] + 'です。', {
-      title: '印', id: 'dw-mark-ask', okLabel: m.type === 'text' ? '文字を直す' : '文字を付ける',
+    const range = m.type !== 'text';
+    const r = await askPopup(DL.PARTS[m.part].label + 'の' + TOOLS[m.type] + 'です。' + (range ? '文字と数量は図の上と凡例（部位ごとの合計）に出ます。' : ''), {
+      title: '印', id: 'dw-mark-ask', okLabel: range ? '保存' : '文字を直す',
       input: { label: '文字（例: クロス張替）', value: m.label, placeholder: '例: クロス張替' },
+      fields: range ? [{ key: 'qty', label: '数量', value: m.qty || '', placeholder: '例: 12.5', inputMode: 'decimal' }, { key: 'unit', label: '単位', value: m.unit || DL.UNITS[0], options: DL.UNITS }] : null,
       more: others.map(k => ({ id: 'dw-mark-' + k, label: '部位を' + DL.PARTS[k].label + 'に変える', value: k })).concat([{ id: 'dw-mark-del', label: '削除', value: 'del', danger: true }])
     });
     if (st !== s || r == null) return;
     const i = st.marks.findIndex(x => x.id === m.id);
     if (i < 0) return;
-    if (typeof r === 'object') {
+    if (typeof r === 'object' && r.more) {
       if (r.more === 'del') edit(() => st.marks.splice(i, 1));
       else edit(() => { st.marks[i].part = r.more; });
       return;
     }
-    if (r === m.label || (m.type === 'text' && !r)) return; // 文字の印を空にするときは「削除」
-    edit(() => { st.marks[i].label = r.slice(0, DL.LABEL_MAX); });
+    if (!range) {
+      if (r === m.label || !r) return; // 文字の印を空にするときは「削除」
+      edit(() => { st.marks[i].label = r.slice(0, DL.LABEL_MAX); });
+      return;
+    }
+    const qty = DL.cleanQty(r.qty);
+    if (r.qty && !qty) { toast('数量は 0 より大きい数字で入れてください（小数は2桁まで）'); return; }
+    if (r.text === m.label && qty === (m.qty || '') && (!qty || r.unit === m.unit)) return;
+    edit(() => {
+      const x = st.marks[i];
+      x.label = r.text.slice(0, DL.LABEL_MAX);
+      if (qty) { x.qty = qty; x.unit = r.unit; } else { delete x.qty; delete x.unit; }
+    });
   }
 
   /* ---------- 上のボタン ---------- */
