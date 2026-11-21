@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- 通信先の決まり（CSP）。'wasm-unsafe-eval' は写真の文字認識（tesseract の wasm）、connect-src の data: blob: は図面・写真の取り込み（fetch）のため。同じものを _headers にも書く（frame-ancestors は meta では効かないので _headers だけ）。CDN は使う部品の版のフォルダだけ（版を上げたらここも）。Supabase と Worker（写真の置き場）の宛先は今は仮のワイルドカード（Task 22 で本物の URL に替える）。meta と _headers は同じに保つ（tests/csp.test.js） -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/ https://cdn.jsdelivr.net/npm/jspdf@2.5.1/ https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.5.1/ https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/ https://cdn.sheetjs.com/xlsx-0.20.3/ https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/ https://cdn.jsdelivr.net/npm/tesseract.js@v5.1.1/ https://cdn.jsdelivr.net/npm/tesseract.js-core@v5.1.1/; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' blob: data: https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/ https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/ https://cdn.jsdelivr.net/npm/tesseract.js@v5.1.1/ https://cdn.jsdelivr.net/npm/tesseract.js-core@v5.1.1/ https://tessdata.projectnaptha.com; worker-src 'self' blob:; font-src 'self' data:; base-uri 'self'; form-action 'self'; object-src 'none'">
+<title>お試し版 業者ツール</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/app.css?v=ff0d33e">
+<link rel="stylesheet" href="css/notice.css?v=ff0d33e">
+<link rel="stylesheet" href="css/teikei.css?v=ff0d33e">
+</head>
+<body>
+
+<!-- 01 ログイン -->
+<section id="screen-login" class="screen login">
+  <div class="login-title">業者ツール</div>
+  <div class="login-lead">報告書・見積書・工事掲示・図面をスマホで作って送る</div>
+  <form id="login-form" class="body" style="padding:0" novalidate>
+    <div class="ff"><label for="login-mail">メールアドレス</label><input id="login-mail" type="email" autocomplete="username" placeholder="name@example.com"></div>
+    <div class="ff"><label for="login-pw">パスワード</label><input id="login-pw" type="password" autocomplete="current-password"></div>
+    <button id="login-btn" class="btn" type="submit">ログイン</button>
+    <div id="login-msg" class="msg err" role="alert"></div>
+    <button id="forgot-open" class="textlink" type="button">パスワードを忘れた</button>
+  </form>
+  <div id="forgot" class="card" hidden>
+    <div class="card-t">パスワードの再設定</div>
+    <div class="card-d">登録してあるメールアドレスにだけ、パスワードを決め直すリンクを送ります。登録していないアドレスには届きません。</div>
+    <div class="ff"><label for="forgot-mail">メールアドレス</label><input id="forgot-mail" type="email" autocomplete="email"></div>
+    <button id="forgot-send" class="btn sm" type="button">再設定のメールを送る</button>
+    <div id="forgot-msg" class="msg" role="status"></div>
+  </div>
+  <div id="recover" class="card" hidden>
+    <div class="card-t">新しいパスワードを決める</div>
+    <div class="ff"><label for="recover-pw">新しいパスワード（8文字以上）</label><input id="recover-pw" type="password" autocomplete="new-password"></div>
+    <button id="recover-save" class="btn sm" type="button">このパスワードにする</button>
+    <div id="recover-msg" class="msg" role="status"></div>
+  </div>
+  <div class="legal-links"><a class="textlink" id="login-terms" href="legal/terms.html">利用規約</a><a class="textlink" id="login-privacy" href="legal/privacy.html">プライバシーポリシー</a></div>
+  <div class="login-note">会社ごとのアカウント。会社の情報・単価表・メンバーは管理者が変えられます。<br>招待された人は、招待メールのリンクからパスワードを決めて入ります。</div>
+</section>
+
+<!-- 所属の無い人（招待されていない・外された）と利用を終えた会社の人（文言は js/auth.js）: ログアウトだけ -->
+<section id="screen-nomember" class="screen login">
+  <div class="login-title">業者ツール</div>
+  <div class="card">
+    <div class="card-t" id="nm-msg">この会社のメンバーではありません。管理者に招待を頼んでください</div>
+    <button id="nm-logout" class="btn" type="button">ログアウト</button>
+  </div>
+</section>
+
+<!-- 02 案件一覧 -->
+<section id="screen-cases" class="screen">
+  <div class="hd">
+    <div class="hd-t"><div class="hd-title">案件</div><div class="hd-sub js-org-name"></div></div>
+    <a href="#settings" id="open-settings" class="hd-btn">設定</a>
+  </div>
+  <div class="search"><input id="cases-q" type="search" aria-label="物件名・号室で探す" placeholder="物件名・号室で探す"></div>
+  <div class="body">
+    <div id="cases-list" class="list"></div>
+    <div id="cases-msg" class="msg err"></div>
+  </div>
+  <div class="foot col"><a href="#case/new" id="case-new" class="btn">＋ 案件を登録</a><nav class="tabs" data-active="cases" aria-label="画面の切り替え"></nav></div>
+</section>
+
+<!-- カレンダー（優先順／月・週） -->
+<section id="screen-calendar" class="screen">
+  <div class="hd">
+    <div class="hd-t"><div class="hd-title">カレンダー</div><div class="hd-sub js-org-name"></div></div>
+  </div>
+  <div class="body">
+    <div class="seg" id="cal-view">
+      <button type="button" data-v="list" aria-pressed="true">優先順</button>
+      <button type="button" data-v="cal" aria-pressed="false">カレンダー</button>
+    </div>
+    <div id="cal-msg" class="msg err"></div>
+    <div id="cal-host"></div>
+  </div>
+  <div class="foot tabs-foot"><nav class="tabs" data-active="calendar" aria-label="画面の切り替え"></nav></div>
+</section>
+
+<!-- 03 案件登録・編集 -->
+<section id="screen-caseform" class="screen white">
+  <div class="hd">
+    <button class="back" type="button" id="cf-back" aria-label="戻る">‹</button>
+    <div class="hd-t"><div class="hd-title" id="cf-title">案件を登録</div></div>
+  </div>
+  <form id="cf-form" class="body" novalidate>
+    <div class="ff"><label for="cf-name">物件名<span class="req">必須</span></label><input id="cf-name" type="text" maxlength="100" placeholder="サンプルハイツ"></div>
+    <div class="ff"><label for="cf-room">号室</label><input id="cf-room" type="text" maxlength="40" placeholder="302"></div>
+    <div class="ff"><label for="cf-addr">住所</label><input id="cf-addr" type="text" maxlength="200" placeholder="東京都…"></div>
+    <div class="ff"><label for="cf-survey">調査日時</label><input id="cf-survey" type="datetime-local"></div>
+    <div class="ff"><span class="lbl">工事日</span>
+      <div class="cf-work"><input id="cf-work-start" type="date" aria-label="工事日（開始）"><span>〜</span><input id="cf-work-end" type="date" aria-label="工事日（終了）"></div></div>
+    <div class="sep"></div>
+    <div class="ff"><label for="cf-client">元請（送り先）</label><input id="cf-client" type="text" maxlength="100" list="cf-clients" autocomplete="off" placeholder="みどり管理 ／ 前に使った名前から選べる"><datalist id="cf-clients"></datalist></div>
+    <div class="ff"><label for="cf-contact">担当者名</label><input id="cf-contact" type="text" maxlength="60" placeholder="山田"></div>
+    <div class="ff"><label for="cf-mail">送り先メール</label><input id="cf-mail" type="email" maxlength="200" placeholder="yamada@example.com"></div>
+    <div class="ff"><label for="cf-memo">メモ</label><textarea id="cf-memo" rows="3" maxlength="2000" placeholder="鍵の場所、駐車など"></textarea></div>
+    <div class="hint">物件名・号室・元請・担当者名は、報告書・見積書・工事掲示・共有の文面に自動で入ります。調査日時・工事日はカレンダーに出ます（工事日は工事掲示にも入ります）。</div>
+    <div id="cf-msg" class="msg err" role="alert"></div>
+  </form>
+  <div class="foot">
+    <button id="cf-save" class="btn wide" type="button">登録する</button>
+  </div>
+</section>
+
+<!-- 見積の一覧（全案件 #estimates・案件ごと #case/{id}/estimates）。フェーズ（請求と入金は 請求の画面 #billing） -->
+<section id="screen-estimates" class="screen">
+  <div class="hd">
+    <a href="#cases" class="back" id="pl-back" aria-label="戻る" hidden>‹</a>
+    <div class="hd-t"><div class="hd-title" id="pl-title">見積</div><div class="hd-sub" id="pl-sub"></div></div>
+  </div>
+  <div class="body">
+    <div class="ff"><label for="pl-month">月（工事日。無ければ調査日・作成日）</label><select id="pl-month"></select></div>
+    <div class="chips" id="pl-filter" role="group" aria-label="フェーズで絞る"></div>
+    <div id="pl-list" class="list"></div>
+    <div id="pl-msg" class="msg err" role="status"></div>
+  </div>
+  <div class="foot col"><button id="pl-new" class="btn" type="button" hidden>＋ 新しい見積</button><nav class="tabs" data-active="estimates" aria-label="画面の切り替え"></nav></div>
+</section>
+
+<!-- 請求（#billing・#billing/YYYY-MM。下のタブ）。請求先ごとに、何月分で請求に上がっているか -->
+<section id="screen-billing" class="screen">
+  <div class="hd">
+    <div class="hd-t"><div class="hd-title">請求</div><div class="hd-sub">請求先ごとに、何月分で請求に上がっているか</div></div>
+  </div>
+  <div class="body">
+    <div class="chips" role="group" aria-label="見方">
+      <button type="button" class="chip" id="bl-v-month">月ごと</button>
+      <button type="button" class="chip" id="bl-v-table">請求先ごとの表</button>
+    </div>
+    <div class="bl-month">
+      <button type="button" class="btn ghost sm" id="bl-prev" aria-label="前の月">‹</button>
+      <div class="bl-month-t" id="bl-month-t" aria-live="polite"></div>
+      <button type="button" class="btn ghost sm" id="bl-next" aria-label="次の月">›</button>
+    </div>
+    <div id="bl-body" class="list"></div>
+    <a class="btn ghost sm" href="#invoices" id="bl-invoices">出した請求書の一覧（入金済みを外す・取り消す）</a>
+    <div id="bl-msg" class="msg err" role="status"></div>
+  </div>
+  <div class="foot tabs-foot"><nav class="tabs" data-active="billing" aria-label="画面の切り替え"></nav></div>
+</section>
+
+<!-- 請求書を作る（#invoice/new。請求の画面の「請求書を作る」から）。紙面（見積書と同じ形）を見ながら作る -->
+<section id="screen-invoice" class="screen white">
+  <div class="hd">
+    <a href="#billing" class="back" aria-label="戻る">‹</a>
+    <div class="hd-t"><div class="hd-title">請求書を作る</div><div class="hd-sub" id="iv-sub"></div></div>
+  </div>
+  <div class="body">
+    <div class="hint" id="iv-paper-hint">下見です。まだ発行していません。紙面を押すと、直す欄に移ります。</div>
+    <button type="button" class="iv-paper" id="iv-paper" aria-label="請求書の下見。押すと直す欄に移ります"></button>
+    <div id="iv-progress" class="msg" role="status"></div>
+    <div class="card" id="iv-edit">
+      <div class="card-t" id="iv-to"></div>
+      <div class="card-d" id="iv-period"></div>
+      <div class="grid2">
+        <div class="ff"><label for="iv-issue">請求日</label><input id="iv-issue" type="date"></div>
+        <div class="ff"><label for="iv-due">お支払期限</label><input id="iv-due" type="date"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-t">載せる見積</div>
+      <div class="hint" id="iv-mode"></div>
+      <div id="iv-items" class="col-gap"></div>
+      <div class="hint">外した見積は「請求中」のまま残り、次の請求書に載せられます</div>
+    </div>
+    <div class="card">
+      <div class="card-t">金額</div>
+      <div id="iv-total" class="iv-total"></div>
+      <div class="hint">消費税は税率ごとに合計してから1回だけ丸めます（見積ごとの税を足した額と数円ずれることがあります）</div>
+      <div id="iv-notes" class="notes" role="status"></div>
+      <div id="iv-bank" class="notes" role="status" hidden></div>
+    </div>
+    <div id="iv-msg" class="msg err" role="status"></div>
+  </div>
+  <div class="foot col"><button id="iv-issue-btn" class="btn" type="button">請求書を発行する</button></div>
+</section>
+
+<!-- 請求書の一覧（#invoices） -->
+<section id="screen-invoices" class="screen">
+  <div class="hd">
+    <a href="#billing" class="back" aria-label="戻る">‹</a>
+    <div class="hd-t"><div class="hd-title">請求書</div><div class="hd-sub">押すとプレビューと共有</div></div>
+  </div>
+  <div class="body">
+    <div id="ivs-list" class="list"></div>
+    <div id="ivs-msg" class="msg err" role="status"></div>
+  </div>
+</section>
+
+<!-- 04 案件画面 -->
+<section id="screen-case" class="screen">
+  <div class="hd">
+    <a href="#cases" class="back" aria-label="戻る">‹</a>
+    <div class="hd-t"><div class="hd-title" id="case-title"></div><div class="hd-sub" id="case-sub"></div></div>
+    <a id="case-edit" class="hd-btn" href="#cases">編集</a>
+  </div>
+  <div id="case-cal" class="case-cal" hidden></div>
+  <div class="body">
+    <div id="case-memo" class="card">
+      <label class="card-t" for="case-memo-t">メモ <span class="hint" id="case-memo-s" role="status"></span></label>
+      <div class="memo-heads" id="case-memo-heads"></div>
+      <textarea id="case-memo-t" rows="2" maxlength="2000" placeholder="鍵の場所、駐車、暗証番号など。ここを押すとそのまま書けます"></textarea>
+    </div>
+    <div class="tools">
+      <button class="tool" type="button" id="tool-report"><span class="tool-t">報告書</span><span class="tool-d">調査・工事の報告</span></button>
+      <button class="tool" type="button" id="tool-estimate"><span class="tool-t">見積書</span><span class="tool-d">定型・明細・版</span></button>
+      <button class="tool" type="button" id="tool-notice"><span class="tool-t">工事掲示</span><span class="tool-d">A4 1枚のお知らせ</span></button>
+      <button class="tool" type="button" id="tool-drawing"><span class="tool-t">図面</span><span class="tool-d">施工範囲の色分け</span></button>
+    </div>
+    <div class="sec-t">この案件の書類</div>
+    <div id="case-docs" class="list"></div>
+    <div id="case-msg" class="msg err"></div>
+  </div>
+</section>
+
+<!-- 05 設定 -->
+<section id="screen-settings" class="screen">
+  <div class="hd">
+    <a href="#cases" class="back" aria-label="戻る">‹</a>
+    <div class="hd-t"><div class="hd-title">設定</div></div>
+  </div>
+  <div class="body">
+    <div class="card" id="set-org">
+      <div class="card-t">会社</div>
+      <div class="card-d">会社名・住所・電話・メール・登録番号（インボイス）・ロゴ・社印<br>→ 見積書・工事掲示の連絡先と、共有の文面の署名に使う</div>
+      <button class="btn ghost sm" type="button" id="set-org-open" aria-expanded="false">会社の情報を編集</button>
+      <div class="hint" id="set-org-ro" hidden>会社の情報は管理者が変えられます</div>
+      <div id="set-org-form" class="body" style="padding:0" hidden>
+        <div class="ff"><label for="so-name">会社名</label><input id="so-name" type="text" maxlength="100"></div>
+        <div class="ff"><label for="so-addr">住所</label><input id="so-addr" type="text" maxlength="200"></div>
+        <div class="ff"><label for="so-tel">電話</label><input id="so-tel" type="tel" maxlength="40"></div>
+        <div class="ff"><label for="so-mail">メール</label><input id="so-mail" type="email" maxlength="200"></div>
+        <div class="ff"><label for="so-reg">登録番号（インボイス）</label><input id="so-reg" type="text" maxlength="14" placeholder="T1234567890123" autocomplete="off"></div>
+        <div class="ff"><label for="so-bank">振込先（請求書に載せる）</label><textarea id="so-bank" rows="2" maxlength="400" placeholder="例：見本銀行 本店 普通 1234567 カ）サンプル"></textarea><span class="hint">変えるには2段階認証（認証アプリの6桁）が要ります。登録済みの振込先を変えられるのは、2段階認証を設定してから24時間たった後です。変えると「操作の記録」に前と後の値が残ります</span></div>
+        <div class="ff"><span class="lbl">ロゴ（画像）</span><div class="img-row" id="so-logo"></div></div>
+        <div class="ff"><span class="lbl">社印（画像）</span><div class="img-row" id="so-seal"></div></div>
+        <label class="check"><input id="so-show" type="checkbox">報告書に会社名とロゴを出す</label>
+        <button class="btn sm" type="button" id="so-save">会社の情報を保存</button>
+        <div id="so-msg" class="msg" role="status"></div>
+      </div>
+    </div>
+    <div class="card" id="set-me">
+      <div class="card-t">自分</div>
+      <div class="card-d">名前・電話（共有の文面の署名）・パスワードの変更</div>
+      <button class="btn ghost sm" type="button" id="set-me-open" aria-expanded="false">自分の情報を編集</button>
+      <div id="set-me-form" class="body" style="padding:0" hidden>
+        <div class="ff"><label for="sm-name">名前</label><input id="sm-name" type="text" maxlength="60"></div>
+        <div class="ff"><label for="sm-tel">電話</label><input id="sm-tel" type="tel" maxlength="40"></div>
+        <button class="btn sm" type="button" id="sm-save">自分の情報を保存</button>
+        <div id="sm-msg" class="msg" role="status"></div>
+        <div class="sep"></div>
+        <div class="ff"><label for="sm-pw">新しいパスワード（8文字以上）</label><input id="sm-pw" type="password" autocomplete="new-password"></div>
+        <button class="btn ghost sm" type="button" id="sm-pw-save">パスワードを変える</button>
+        <div id="sm-pw-msg" class="msg" role="status"></div>
+      </div>
+    </div>
+    <div class="card" id="set-est">
+      <div class="card-t">見積書</div>
+      <div class="card-d">消費税率・定型テンプレート（何行かのまとまり）・よく使う明細・単価マスタの一覧</div>
+      <button class="btn ghost sm" type="button" id="set-est-open" aria-expanded="false">見積書の設定を編集</button>
+      <div id="set-est-form" class="body" style="padding:0" hidden>
+        <div class="ff"><label for="se-tax">消費税率（%）</label><input id="se-tax" type="number" inputmode="decimal" min="0" max="99" step="any"></div>
+        <button class="btn sm" type="button" id="se-tax-save">消費税率を保存</button>
+        <div class="hint" id="se-tax-ro" hidden>消費税率は管理者が変えられます</div>
+        <div id="se-tax-msg" class="msg" role="status"></div>
+        <div class="sep"></div>
+        <div class="grp-t">定型テンプレート</div>
+        <div class="hint">登録は見積書の画面の「この明細を定型に登録」から</div>
+        <div id="se-tpl" class="list"></div>
+        <div class="sep"></div>
+        <div class="grp-t">よく使う明細</div>
+        <div id="se-pre" class="list"></div>
+        <div class="ff"><label for="se-pre-text">摘要</label><input id="se-pre-text" type="text" maxlength="100" placeholder="例：養生費"></div>
+        <div class="grid2">
+          <div class="ff"><label for="se-pre-unit">単位</label><input id="se-pre-unit" type="text" maxlength="20" placeholder="式"></div>
+          <div class="ff"><label for="se-pre-price">原価の単価（円）</label><input id="se-pre-price" type="number" inputmode="numeric" min="0" step="1"></div>
+        </div>
+        <div class="hint">見積書には利益率をかけた額が入ります</div>
+        <button class="btn ghost sm" type="button" id="se-pre-add">よく使う明細を足す</button>
+        <div id="se-msg" class="msg" role="status"></div>
+        <div class="sep"></div>
+        <div class="grp-t">単価マスタ</div>
+        <div class="hint">仕入見積を読み込んだとき（原価）と、見積書のPDFを作ったとき（販売と原価）に自動でたまります。見積書の照合と「過去単価に合わせる」に使います</div>
+        <div class="seg" id="se-rate-kind"><button type="button" data-kind="cost" aria-pressed="true">原価</button><button type="button" data-kind="sell" aria-pressed="false">販売</button><button type="button" data-kind="" aria-pressed="false">すべて</button></div>
+        <input id="se-rate-q" type="search" aria-label="単価マスタを摘要・業者・物件で絞り込む" placeholder="摘要・業者・物件で絞り込む">
+        <div id="se-rate-count" class="hint"></div>
+        <div id="se-rate" class="list"></div>
+        <div id="se-rate-msg" class="msg" role="status"></div>
+      </div>
+    </div>
+    <div class="card" id="set-tk">
+      <div class="card-t">定型見積の単価表</div>
+      <div class="card-d">定型見積もり（被害復旧工事）の工事のセットと単価・一般管理費<br>→ 直した単価は、このあとに作る定型見積から使います</div>
+      <a class="btn ghost sm" href="#settings/teikei" id="set-tk-open">開く</a>
+    </div>
+    <div class="card" id="set-files">
+      <div class="card-t">写真・図面の容量</div>
+      <div class="card-d">写真・図面・ロゴ・社印の合計（上限は会社ごと。いっぱいになったら管理者が運営に相談します）</div>
+      <div id="set-files-use" class="msg" role="status"></div>
+    </div>
+    <div class="card" id="set-clients">
+      <div class="card-t">元請（請求先）</div>
+      <div class="card-d">案件登録で入れた元請が並びます。締め日と請求書のまとめ方を決めておくと、見積の集計が締めの回ごとに分かれます</div>
+      <div id="set-clients-list" class="col-gap"></div>
+      <div id="set-clients-msg" class="msg" role="status"></div>
+    </div>
+    <!-- 管理者だけ（js/members-ui.js） -->
+    <div class="card" id="set-mem" hidden></div>
+    <div class="card" id="set-audit" hidden></div>
+    <div id="set-extra"></div>
+    <button class="link-red" type="button" id="logout">ログアウト</button>
+    <div class="legal-links"><a class="textlink" id="set-terms" href="legal/terms.html">利用規約</a><a class="textlink" id="set-privacy" href="legal/privacy.html">プライバシーポリシー</a></div>
+  </div>
+</section>
+
+ <!-- 06 報告書 -->
+<section id="screen-report" class="screen white">
+  <div class="hd">
+    <button class="back" type="button" id="rp-back" aria-label="戻る">‹</button>
+    <div class="hd-t"><div class="hd-title">報告書</div><div class="hd-sub" id="rp-sub"></div></div>
+  </div>
+  <div class="body" id="rp-body"></div>
+  <div class="foot">
+    <button id="rp-pdf" class="btn wide" type="button">紙面を見る → 共有</button>
+  </div>
+</section>
+
+<!-- 07 見積書 -->
+<section id="screen-estimate" class="screen white">
+  <div class="hd">
+    <button class="back" type="button" id="es-back" aria-label="戻る">‹</button>
+    <div class="hd-t"><div class="hd-title">見積書</div><div class="hd-sub" id="es-sub"></div></div>
+  </div>
+  <div class="body" id="es-body"></div>
+  <div class="foot">
+    <button id="es-pdf" class="btn wide" type="button">紙面を見る → 共有</button>
+    <button id="es-newver" class="btn" type="button" style="flex:1" hidden>新しい版を作って直す</button>
+  </div>
+</section>
+
+<!-- 定型見積（被害復旧工事） -->
+<section id="screen-teikei" class="screen white">
+  <div class="hd">
+    <button class="back" type="button" id="tk-back" aria-label="戻る">‹</button>
+    <div class="hd-t"><div class="hd-title">定型見積書（被害復旧工事）</div><div class="hd-sub" id="tk-sub"></div></div>
+  </div>
+  <div class="body" id="tk-body"></div>
+  <div class="foot tk-foot">
+    <div class="tk-foot-sum"><span class="lbl">総合計</span><b id="tk-foot-total"></b></div>
+    <button id="tk-pdf" class="btn wide" type="button">紙面を見る → 共有</button>
+  </div>
+</section>
+
+<!-- 05 設定: 定型見積の単価表（#settings/teikei 一覧・#settings/teikei/{setId} セット） -->
+<section id="screen-tkrates" class="screen white">
+  <div class="hd">
+    <a href="#settings" class="back" id="tr-back" aria-label="戻る">‹</a>
+    <div class="hd-t"><div class="hd-title" id="tr-title">定型見積の単価表</div><div class="hd-sub" id="tr-sub"></div></div>
+  </div>
+  <div class="body" id="tr-body"></div>
+  <div class="foot"><button id="tr-save" class="btn wide" type="button">保存する</button></div>
+</section>
+
+<!-- 08 仕入見積の読み込み -->
+<section id="screen-import" class="screen white">
+  <div class="hd">
+    <button class="back" type="button" id="im-back" aria-label="戻る">‹</button>
+    <div class="hd-t"><div class="hd-title">仕入見積を読み込む</div><div class="hd-sub" id="im-sub"></div></div>
+  </div>
+  <div class="body">
+    <div class="card">
+      <button id="im-pick" class="btn" type="button">PDF・Excel・写真を選ぶ</button>
+      <input id="im-file" type="file" accept=".pdf,.xlsx,.xlsm,.xls,image/*" hidden>
+      <button id="im-photo-btn" class="btn ghost" type="button">写真を撮って読む</button>
+      <input id="im-photo" type="file" accept="image/*" capture="environment" hidden>
+      <button id="im-ai" class="btn ghost sm" type="button" disabled>AIで読む（準備中）</button>
+      <div class="hint">Excel はそのまま読みます。PDF は文字と位置から表を読みます。写真は端末の中で文字を認識します（AIは使いません。初回は辞書の取得に少し時間がかかります）。紙は明るい所で真上から大きく撮ってください。読めないところは、明細に入れてから手で直してください。</div>
+      <div class="ff"><label for="im-vendor">仕入業者名（社内用。見積書には出ません）</label><input id="im-vendor" type="text" maxlength="100" list="im-vendors" autocomplete="off" placeholder="例：山田内装"><datalist id="im-vendors"></datalist></div>
+      <div id="im-msg" class="msg" role="status"></div>
+    </div>
+    <div id="im-result" class="list" hidden></div>
+  </div>
+  <div class="foot">
+    <button id="im-put" class="btn wide" type="button" disabled>選んだ行を明細に入れる</button>
+  </div>
+</section>
+
+<!-- 09 工事掲示 -->
+<section id="screen-notice" class="screen white">
+  <div class="hd">
+    <button class="back" type="button" id="nt-back" aria-label="戻る">‹</button>
+    <div class="hd-t"><div class="hd-title">工事掲示</div><div class="hd-sub" id="nt-sub"></div></div>
+    <button class="hd-btn" type="button" id="nt-to-pv">プレビューへ↓</button>
+  </div>
+  <div class="body" id="nt-body"></div>
+  <div class="foot col">
+    <div class="row">
+      <button id="nt-dup" class="btn ghost sm" type="button">別の号室に複製</button>
+    </div>
+    <button id="nt-pdf" class="btn" type="button">PDFを作る → 共有</button>
+  </div>
+</section>
+
+<!-- 10 図面 -->
+<section id="screen-drawing" class="screen white">
+  <div class="hd">
+    <button class="back" type="button" id="dw-back" aria-label="戻る">‹</button>
+    <div class="hd-t"><div class="hd-title">図面</div><div class="hd-sub" id="dw-sub"></div></div>
+    <button class="hd-btn" type="button" id="dw-pick2">図面を取り込む</button>
+  </div>
+  <div class="body">
+    <input type="file" id="dw-file" accept="image/*,.pdf" hidden>
+    <div id="dw-msg" class="msg" role="status"></div>
+    <div id="dw-empty" class="card" hidden>
+      <div class="card-t">図面を取り込む</div>
+      <div class="card-d">間取り図・平面図の写真、画像、PDF（1ページ目）を取り込みます。元の図面はそのまま残し、書き込みは別に保存します。</div>
+      <button id="dw-pick" class="btn" type="button">写真・画像・PDFを選ぶ</button>
+    </div>
+    <div id="dw-editor" class="col-gap" hidden>
+      <div class="dw-parts" id="dw-parts" role="group" aria-label="部位"></div>
+      <div class="dw-tools">
+        <div class="seg" id="dw-tools" role="group" aria-label="道具"></div>
+        <div class="seg" id="dw-mode" role="group" aria-label="描く・写真を拡大"></div>
+      </div>
+      <div class="dw-tools">
+        <button id="dw-undo" class="btn ghost sm" type="button">一つ戻す</button>
+        <button id="dw-clear" class="btn ghost sm" type="button">全部消す</button>
+      </div>
+      <div class="dw-hint" id="dw-hint"></div>
+      <div class="dw-stage" id="dw-stage"></div>
+      <div class="dw-poly" id="dw-selbar" hidden>
+        <span id="dw-sel-t"></span>
+        <button id="dw-sel-menu" class="btn sm" type="button">材料・数量・部位・削除</button>
+      </div>
+      <div class="dw-poly" id="dw-polybar" hidden>
+        <span id="dw-poly-t"></span>
+        <button id="dw-poly-close" class="btn sm" type="button">閉じる</button>
+      </div>
+      <div class="card"><div class="card-t">凡例</div><div class="dw-legend" id="dw-legend"></div></div>
+      <div class="card"><div class="card-t">範囲の一覧</div><div class="dw-rows" id="dw-rows"></div></div>
+    </div>
+  </div>
+  <div class="foot col">
+    <button id="dw-pdf" class="btn" type="button">PDFを作る → 共有</button>
+  </div>
+</section>
+
+<!-- 12 プレビューと共有 -->
+<!-- 日報の一覧 -->
+<section id="screen-dailies" class="screen">
+  <div class="hd">
+    <div class="hd-t"><div class="hd-title">日報</div><div class="hd-sub js-org-name"></div></div>
+  </div>
+  <div class="body">
+    <div id="dls-list" class="list"></div>
+    <div id="dls-msg" class="msg err"></div>
+  </div>
+  <div class="foot col"><button id="dls-new" class="btn" type="button">＋ 新しい日報</button><nav class="tabs" data-active="daily" aria-label="画面の切り替え"></nav></div>
+</section>
+
+<!-- 日報の入力 -->
+<section id="screen-daily" class="screen">
+  <div class="hd">
+    <a class="back" href="#daily" id="dl-back" aria-label="戻る">‹</a>
+    <div class="hd-t"><div class="hd-title">日報</div><div class="hd-sub" id="dl-sub"></div></div>
+  </div>
+  <div class="body" id="dl-body"></div>
+  <div class="foot col"><button id="dl-pv" class="btn" type="button">紙面を見る → 共有</button></div>
+</section>
+
+<section id="screen-doc" class="screen">
+  <div class="hd">
+    <a class="back" id="dv-back" href="#cases" aria-label="戻る">‹</a>
+    <div class="hd-t"><div class="hd-title" id="dv-title"></div><div class="hd-sub" id="dv-sub"></div></div>
+    <a class="hd-btn" id="dv-edit" href="#cases">編集に戻る</a>
+    <button class="hd-btn" id="dv-newver" type="button" hidden>新しい版を作って直す</button>
+  </div>
+  <div class="body">
+    <div id="dv-pages" class="dv-pages"></div>
+    <div id="dv-progress" class="msg" role="status"></div>
+    <button id="dv-retry" class="btn ghost sm" type="button" hidden>もう一度作る</button>
+    <div class="hint" style="text-align:center">PDFは端末の中で作ります。上下にめくってページを確かめられます。</div>
+    <div id="dv-sent" class="card"></div>
+  </div>
+  <div class="foot col">
+    <div class="row">
+      <button id="dv-line" class="btn" type="button" disabled>LINEで共有</button>
+      <button id="dv-mail" class="btn" type="button" disabled>メールで共有</button>
+    </div>
+    <!-- 報告書の次にすること（共有のすぐ下。画面を下まで送らなくても見える） -->
+    <div class="row" id="dv-next" hidden>
+      <button id="dv-next-est" class="btn ghost sm" type="button">見積書を作る</button>
+      <button id="dv-next-bill" class="btn ghost sm" type="button">見積を選んで請求へ</button>
+    </div>
+    <div id="dv-next-msg" class="msg err" role="status"></div>
+    <button id="dv-dl" class="btn ghost sm" type="button" disabled>PDFをダウンロード</button>
+  </div>
+</section>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<!-- CDN の部品は改ざん検知（integrity）付き。版を上げたら integrity も作り直す: curl -sL <URL> | openssl dgst -sha384 -binary | openssl base64 -A -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@panzoom/panzoom@4.5.1/dist/panzoom.min.js" integrity="sha384-ZOYffjPUyf23W5DufkQVkrN7uZvIMRRCPo64S2N2S0mFM9+bFZpn2/MQTy2O35gF" crossorigin="anonymous"></script>
+<script src="js/fake-sb.js?v=ff0d33e"></script>
+<script src="js/demo.js?v=ff0d33e"></script>
+<script src="js/files.js?v=ff0d33e"></script>
+<script src="js/case-logic.js?v=ff0d33e"></script>
+<script src="js/report-logic.js?v=ff0d33e"></script>
+<script src="js/estimate-logic.js?v=ff0d33e"></script>
+<script src="js/teikei-default-rates.js?v=ff0d33e"></script>
+<script src="js/teikei-logic.js?v=ff0d33e"></script>
+<script src="js/estimate-import.js?v=ff0d33e"></script>
+<script src="js/notice-logic.js?v=ff0d33e"></script>
+<script src="js/drawing-logic.js?v=ff0d33e"></script>
+<script src="js/calendar-logic.js?v=ff0d33e"></script>
+<script src="js/daily-logic.js?v=ff0d33e"></script>
+<script src="js/pdfjs-loader.js?v=ff0d33e"></script>
+<script src="js/photo-marks.js?v=ff0d33e"></script>
+<script src="js/app.js?v=ff0d33e"></script>
+<script src="js/auth.js?v=ff0d33e"></script>
+<script src="js/cases-api.js?v=ff0d33e"></script>
+<script src="js/docs-api.js?v=ff0d33e"></script>
+<script src="js/estimates-api.js?v=ff0d33e"></script>
+<script src="js/teikei-api.js?v=ff0d33e"></script>
+<script src="js/daily-api.js?v=ff0d33e"></script>
+<script src="js/pipeline-logic.js?v=ff0d33e"></script>
+<script src="js/pipeline-api.js?v=ff0d33e"></script>
+<script src="js/cases-ui.js?v=ff0d33e"></script>
+<script src="js/case-form.js?v=ff0d33e"></script>
+<script src="js/case-ui.js?v=ff0d33e"></script>
+<script src="js/pipeline-ui.js?v=ff0d33e"></script>
+<script src="js/invoice-pdf.js?v=ff0d33e"></script>
+<script src="js/invoice-ui.js?v=ff0d33e"></script>
+<script src="js/billing-ui.js?v=ff0d33e"></script>
+<script src="js/calendar-ui.js?v=ff0d33e"></script>
+<script src="js/mfa-ui.js?v=ff0d33e"></script>
+<script src="js/settings-ui.js?v=ff0d33e"></script>
+<script src="js/teikei-rates-ui.js?v=ff0d33e"></script>
+<script src="js/members-ui.js?v=ff0d33e"></script>
+<script src="js/photo-mark-editor.js?v=ff0d33e"></script>
+<script src="js/report-pdf.js?v=ff0d33e"></script>
+<script src="js/estimate-pdf.js?v=ff0d33e"></script>
+<script src="js/teikei-pdf.js?v=ff0d33e"></script>
+<script src="js/estimate-sheet-ui.js?v=ff0d33e"></script>
+<script src="js/report-sheet-ui.js?v=ff0d33e"></script>
+<script src="js/notice-pdf.js?v=ff0d33e"></script>
+<script src="js/drawing-pdf.js?v=ff0d33e"></script>
+<script src="js/report-ui.js?v=ff0d33e"></script>
+<script src="js/estimate-ui.js?v=ff0d33e"></script>
+<script src="js/teikei-ui.js?v=ff0d33e"></script>
+<script src="js/estimate-import-ui.js?v=ff0d33e"></script>
+<script src="js/notice-ui.js?v=ff0d33e"></script>
+<script src="js/drawing-ui.js?v=ff0d33e"></script>
+<script src="js/daily-pdf.js?v=ff0d33e"></script>
+<script src="js/daily-ui.js?v=ff0d33e"></script>
+<script src="js/share-logic.js?v=ff0d33e"></script>
+<script src="js/share-ui.js?v=ff0d33e"></script>
+<script src="js/preview-ui.js?v=ff0d33e"></script>
+<script src="js/start.js?v=ff0d33e"></script>
+</body>
+</html>

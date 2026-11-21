@@ -1,0 +1,59 @@
+/* css/teikei.css — 定型見積（被害復旧工事）の紙面。試作 被害復旧工事_見積試作.html の <style> から紙面の分だけ写した（編集用の色・.ed・.pv は写さない）
+   紙は A4 横を 96dpi の px で組む（297mm=1122.5px / 210mm=793.7px）。画面には出さず、PDF の撮影台（画面外・等倍）で撮るだけ
+   変えたところ: 工事掲示の .sheet（css/notice.css）とぶつからないよう、紙は .tk-sheet にして中の規則は全部 .tk-sheet の下に入れた */
+.tk-sheet{width:1122.5px;height:793.7px;background:#fff;box-sizing:border-box;
+       padding:60px;position:relative;color:#000;
+       font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;
+       /* 寸法表：見出し22／金額18／本文11.5／脚注11。表紙も内訳書もここから使う */
+       --pv-title:22px;--pv-big:18px;--pv-body:11.5px;--pv-small:11px;
+       font-size:var(--pv-body);line-height:1.5}
+.tk-sheet *{box-sizing:border-box}
+.tk-sheet .frame{border:1px solid #000;width:100%;height:100%;position:relative}
+.tk-sheet .gothic,.tk-sheet table{font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif}
+
+/* --- 表紙 --- */
+.tk-sheet .cv-date{position:absolute;right:14px;top:18px;font-size:var(--pv-body)}
+.tk-sheet .cv-h1{position:absolute;left:0;right:0;top:48px;text-align:center;
+       font-size:var(--pv-title);font-weight:600;letter-spacing:.25em}
+.tk-sheet .cv-to{position:absolute;left:6.5%;top:22.5%;width:38%;border-bottom:1px solid #000;
+       font-size:14px;font-weight:500;padding-bottom:3px;white-space:nowrap;overflow:hidden}
+.tk-sheet .cv-sama{position:absolute;left:46%;top:22.5%;font-size:14px;font-weight:500}
+.tk-sheet .cv-lead{position:absolute;left:13%;top:29.5%;font-size:var(--pv-body);line-height:1.7}
+.tk-sheet .cv-amt{position:absolute;left:8%;right:8%;top:38.5%;border-bottom:1px solid #000;
+        display:flex;align-items:baseline;padding-bottom:6px}
+.tk-sheet .cv-amt .lb{font-size:var(--pv-big);font-weight:600;letter-spacing:.12em;margin-left:20%}
+.tk-sheet .cv-amt .vl{font-size:var(--pv-big);font-weight:600;margin-left:auto;margin-right:16%;
+            font-variant-numeric:tabular-nums}
+.tk-sheet .cv-sub{position:absolute;right:8%;top:51%;width:34%;font-size:var(--pv-body)}
+.tk-sheet .cv-sub div{display:flex;border-bottom:1px solid #000;padding:2px 0 3px;margin-bottom:5px}
+.tk-sheet .cv-sub .vl{margin-left:auto;font-variant-numeric:tabular-nums}
+.tk-sheet .cv-box{position:absolute;left:4.5%;top:58%;width:46%;height:34%;border:1px solid #000;
+        padding:12px 14px;font-size:var(--pv-body);line-height:1.55}
+.tk-sheet .cv-box .r{display:flex;gap:10px;margin-bottom:9px}
+.tk-sheet .cv-box .k{flex:0 0 76px}
+.tk-sheet .cv-box .v{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tk-sheet .cv-box .r.kikan .v{white-space:normal}
+/* 自社情報は項目数で高さが変わるので、下端を固定して上に伸ばす（見積代金の枠と重ねない） */
+.tk-sheet .cv-co{position:absolute;right:7%;bottom:8%;text-align:left}
+.tk-sheet .cv-co .nm{font-size:16px;font-weight:700;margin-bottom:8px}
+.tk-sheet .cv-co .ad{font-size:var(--pv-small);line-height:1.75}
+
+/* --- 内訳書 --- */
+.tk-sheet .dt-h1{text-align:center;font-size:var(--pv-title);font-weight:600;letter-spacing:.25em;
+       padding:26px 0 18px}
+/* 表の幅も列幅も px で決め打ち（col の % が効かないブラウザがある） */
+.tk-sheet table{width:964px;margin:0 18px;border-collapse:collapse;font-size:var(--pv-body);
+             table-layout:fixed}
+/* 行の高さは tr だけに持たせる（td に height を書くと中身のある行だけ膨らむ） */
+.tk-sheet th,.tk-sheet td{border:1px solid #000;padding:1px 4px;line-height:1.2;
+                    overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+                    vertical-align:middle}
+.tk-sheet tr{height:24px}
+.tk-sheet th{text-align:center;font-weight:400;background:#fff}
+.tk-sheet td.num{text-align:right;font-variant-numeric:tabular-nums}
+.tk-sheet td.ctr{text-align:center}
+/* 実物の見積書の列幅の比率。合計 964px */
+.tk-sheet col.c-no{width:38px}   .tk-sheet col.c-nm{width:202px}  .tk-sheet col.c-sp{width:270px}
+.tk-sheet col.c-qt{width:39px}   .tk-sheet col.c-un{width:39px}   .tk-sheet col.c-pr{width:96px}
+.tk-sheet col.c-am{width:87px}   .tk-sheet col.c-nt{width:193px}
+.tk-sheet .dt-foot{position:absolute;right:18px;bottom:10px;font-size:var(--pv-body)}
